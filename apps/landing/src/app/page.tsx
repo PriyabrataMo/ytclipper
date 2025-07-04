@@ -110,17 +110,6 @@ export default function Home() {
     setEmail('');
   };
 
-  const scrollToWaitlist = () => {
-    setMobileMenuOpen(false);
-    emailInputRef.current?.scrollIntoView({
-      behavior: 'smooth',
-      block: 'center',
-    });
-    setTimeout(() => {
-      emailInputRef.current?.focus();
-    }, 500);
-  };
-
   const renderSuccessState = (message: string, isAlreadyRegistered = false) => (
     <div
       className={`glass p-6 sm:p-8 border ${
