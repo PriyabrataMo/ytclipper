@@ -5,10 +5,15 @@ services:
     image: ${BACKEND_IMAGE:-ghcr.io/priyabratamo/ytclipper/backend:latest}
     container_name: ytclipper-backend
     restart: unless-stopped
-    env_file:
-      - .env
+    environment:
+      - PORT=${BACKEND_PORT:-8080}
+      - ENV=${ENV:-staging}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - LOG_PRETTY=${LOG_PRETTY:-true}
+      - API_TIMEOUT=${API_TIMEOUT:-30s}
+      - AUTH0_SCOPE='openid profile email'
     ports:
-      - '8080:8080'
+      - '${BACKEND_PORT:-8080}:8080'
     networks:
       - ytclipper-network
     healthcheck:
