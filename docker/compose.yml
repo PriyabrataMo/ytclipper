@@ -22,7 +22,7 @@ services:
       start_period: 30s
 
   app:
-    image: ${FRONTEND_IMAGE:-ghcr.io/PriyabrataMo/ytclipper/frontend:latest}
+    image: ${FRONTEND_IMAGE:-ghcr.io/priyabratamo/ytclipper/frontend:latest}
     container_name: ytclipper-app
     restart: unless-stopped
     ports:
@@ -36,26 +36,6 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-
-  postgres:
-    image: postgres:15-alpine
-    container_name: ytclipper-postgres
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: ${DB_NAME:-ytclipper}
-      POSTGRES_USER: ${DB_USER:-postgres}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-    ports:
-      - '5432:5432'
-    networks:
-      - ytclipper-network
-    healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U ${DB_USER:-postgres}']
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
   redis:
     image: redis:7-alpine
