@@ -1,0 +1,107 @@
+name: Infrastructure Setup
+
+on:
+  workflow_dispatch:
+    inputs:
+      force_recreate:
+        description: "Force recreate all containers"
+        type: boolean
+        default: false
+
+jobs:
+  setup-infrastructure:
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.8.0
+        with:
+          ssh-private-key: ${{ secrets.VPS_SSH_KEY }}
+
+      - name: Add VPS to known hosts
+        run: |
+          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Create deployment directory
+        run: |
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
+            mkdir -p /opt/ytclipper
+            cd /opt/ytclipper
+          "
+
+      - name: Copy docker-compose file
+        run: |
+          scp docker/compose.yml ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/opt/ytclipper/
+
+      - name: Create environment file
+        run: |
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
+            cat > /opt/ytclipper/.env << 'EOF'
+            # Backend Configuration
+            PORT=8080
+            ENV=production
+            LOG_LEVEL=info
+            LOG_PRETTY=false
+            
+            # Database Configuration
+            DB_HOST=postgres
+            DB_PORT=5432
+            DB_NAME=ytclipper
+            DB_USER=postgres
+            DB_PASSWORD=${{ secrets.DB_PASSWORD }}
+            DB_SSL_MODE=require
+            
+            # JWT Configuration
+            JWT_SECRET=${{ secrets.JWT_SECRET }}
+            JWT_EXPIRY=24h
+            
+            # Auth0 Configuration
+            AUTH0_DOMAIN=${{ secrets.AUTH0_DOMAIN }}
+            AUTH0_AUDIENCE=${{ secrets.AUTH0_AUDIENCE }}
+            AUTH0_CLIENT_ID=${{ secrets.AUTH0_CLIENT_ID }}
+            AUTH0_CLIENT_SECRET=${{ secrets.AUTH0_CLIENT_SECRET }}
+            
+            # API Configuration
+            API_TIMEOUT=30s
+            API_RATE_LIMIT=100
+            METRICS_ENABLED=true
+            TRACING_ENABLED=true
+            
+            # Redis Configuration
+            REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}
+            
+            # Container Images
+            BACKEND_IMAGE=ghcr.io/${{ github.repository }}/backend:latest
+            FRONTEND_IMAGE=ghcr.io/${{ github.repository }}/frontend:latest
+            EOF
+          "
+
+      - name: Setup infrastructure
+        run: |
+          RECREATE_FLAG=""
+          if [[ "${{ github.event.inputs.force_recreate }}" == "true" ]]; then
+            RECREATE_FLAG="--force-recreate"
+          fi
+
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
+            cd /opt/ytclipper
+            
+            # Login to registry
+            echo '${{ secrets.GITHUB_TOKEN }}' | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            
+            # Start infrastructure services first
+            docker compose up -d postgres redis
+            
+            # Wait for database to be ready
+            sleep 30
+            
+            # Start application services
+            docker compose up -d ${RECREATE_FLAG}
+            
+            # Show status
+            docker compose ps
+          "

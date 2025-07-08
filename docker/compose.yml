@@ -1,31 +1,6 @@
 version: '3.8'
 
 services:
-  # PostgreSQL 14 Database
-  postgres:
-    image: postgres:14-alpine
-    container_name: clipture-postgres
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: clipture
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_INITDB_ARGS: '--auth-host=scram-sha-256 --auth-local=scram-sha-256'
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ../init-scripts:/docker-entrypoint-initdb.d
-    ports:
-      - '5432:5432'
-    networks:
-      - clipture-network
-    healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -d clipture -U postgres']
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 10s
-
-  # Backend API
   backend:
     build:
       context: ../backend
@@ -55,9 +30,6 @@ services:
       - TRACING_ENABLED=true
     ports:
       - '8080:8080'
-    depends_on:
-      postgres:
-        condition: service_healthy
     networks:
       - clipture-network
     healthcheck:
@@ -89,28 +61,6 @@ services:
         [
           'CMD-SHELL',
           'wget --no-verbose --tries=1 --spider http://localhost:80/health || exit 1',
-        ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 10s
-
-  # Landing Page
-  landing:
-    build:
-      context: ../apps/landing
-      dockerfile: Dockerfile
-    container_name: clipture-landing
-    restart: unless-stopped
-    ports:
-      - '3001:3000'
-    networks:
-      - clipture-network
-    healthcheck:
-      test:
-        [
-          'CMD-SHELL',
-          'wget --no-verbose --tries=1 --spider http://localhost:3000 || exit 1',
         ]
       interval: 30s
       timeout: 10s

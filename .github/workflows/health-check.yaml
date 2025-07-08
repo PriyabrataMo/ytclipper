@@ -1,0 +1,68 @@
+name: Health Check
+
+on:
+  schedule:
+    - cron: "*/15 * * * *" # Every 15 minutes
+  workflow_dispatch:
+
+jobs:
+  health-check:
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.8.0
+        with:
+          ssh-private-key: ${{ secrets.VPS_SSH_KEY }}
+
+      - name: Add VPS to known hosts
+        run: |
+          ssh-keyscan -H ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Check application health
+        run: |
+          ssh ${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }} "
+            echo 'Checking application health...'
+            
+            # Check if containers are running
+            docker compose -f /opt/ytclipper/compose.yml ps
+            
+            # Check backend health
+            if curl -f http://localhost:8080/health; then
+              echo '✅ Backend is healthy'
+            else
+              echo '❌ Backend health check failed'
+              exit 1
+            fi
+            
+            # Check frontend health
+            if curl -f http://localhost:3000/; then
+              echo '✅ Frontend is healthy'
+            else
+              echo '❌ Frontend health check failed'
+              exit 1
+            fi
+            
+            # Check database connection
+            if docker compose -f /opt/ytclipper/compose.yml exec -T postgres pg_isready; then
+              echo '✅ Database is healthy'
+            else
+              echo '❌ Database health check failed'
+              exit 1
+            fi
+          "
+
+      - name: Health check summary
+        if: success()
+        run: |
+          echo "## ✅ All Services Healthy" >> $GITHUB_STEP_SUMMARY
+          echo "- Backend: Healthy" >> $GITHUB_STEP_SUMMARY
+          echo "- Frontend: Healthy" >> $GITHUB_STEP_SUMMARY
+          echo "- Database: Healthy" >> $GITHUB_STEP_SUMMARY
+
+      - name: Alert on failure
+        if: failure()
+        run: |
+          echo "## ❌ Health Check Failed" >> $GITHUB_STEP_SUMMARY
+          echo "One or more services are unhealthy. Please investigate." >> $GITHUB_STEP_SUMMARY
