@@ -2,83 +2,72 @@ version: '3.8'
 
 services:
   backend:
-    build:
-      context: ../backend
-      dockerfile: Dockerfile
-    container_name: clipture-backend
+    image: ${BACKEND_IMAGE:-ghcr.io/PriyabrataMo/ytclipper/backend:latest}
+    container_name: ytclipper-backend
     restart: unless-stopped
-    environment:
-      - PORT=8080
-      - ENV=production
-      - LOG_LEVEL=info
-      - LOG_PRETTY=false
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_NAME=clipture
-      - DB_USER=postgres
-      - DB_PASSWORD=postgres
-      - DB_SSL_MODE=disable
-      - JWT_SECRET=your_production_jwt_secret_here
-      - JWT_EXPIRY=24h
-      - AUTH_JWT_SECRET=your_production_auth_secret_here
-      - AUTH_JWT_EXPIRY_HOURS=72
-      - AUTH_PASSWORD_RESET_EXPIRY=24h
-      - AUTH_TOKEN_ISSUER=clipture-app
-      - API_TIMEOUT=30s
-      - API_RATE_LIMIT=100
-      - METRICS_ENABLED=true
-      - TRACING_ENABLED=true
+    env_file:
+      - .env
     ports:
       - '8080:8080'
+    depends_on:
+      - postgres
+      - redis
     networks:
-      - clipture-network
+      - ytclipper-network
     healthcheck:
-      test:
-        [
-          'CMD-SHELL',
-          'wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1',
-        ]
+      test: ['CMD-SHELL', 'wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1']
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 30s
 
-  # Frontend App
   app:
-    build:
-      context: ../apps/app
-      dockerfile: Dockerfile
-    container_name: clipture-app
+    image: ${FRONTEND_IMAGE:-ghcr.io/PriyabrataMo/ytclipper/frontend:latest}
+    container_name: ytclipper-app
     restart: unless-stopped
     ports:
       - '3000:80'
     depends_on:
       - backend
     networks:
-      - clipture-network
+      - ytclipper-network
     healthcheck:
-      test:
-        [
-          'CMD-SHELL',
-          'wget --no-verbose --tries=1 --spider http://localhost:80/health || exit 1',
-        ]
+      test: ['CMD-SHELL', 'wget --no-verbose --tries=1 --spider http://localhost:80/ || exit 1']
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 10s
 
-  # Redis (for caching, sessions, etc.)
+  postgres:
+    image: postgres:15-alpine
+    container_name: ytclipper-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-ytclipper}
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - '5432:5432'
+    networks:
+      - ytclipper-network
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${DB_USER:-postgres}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   redis:
     image: redis:7-alpine
-    container_name: clipture-redis
+    container_name: ytclipper-redis
     restart: unless-stopped
-    command: redis-server --appendonly yes --requirepass redis_password
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD}
     volumes:
       - redis_data:/data
     ports:
       - '6379:6379'
     networks:
-      - clipture-network
+      - ytclipper-network
     healthcheck:
       test: ['CMD', 'redis-cli', '--raw', 'incr', 'ping']
       interval: 30s
@@ -92,5 +81,5 @@ volumes:
     driver: local
 
 networks:
-  clipture-network:
+  ytclipper-network:
     driver: bridge

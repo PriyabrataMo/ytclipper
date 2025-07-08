@@ -2,14 +2,14 @@ name: Backend Build & Push
 
 on:
   push:
-    branches: [main, develop, ci-cd]
-    paths:
-      - "backend/**"
-      - ".github/workflows/backend-build.yaml"
+    branches: [main]
+    # paths:
+    #   - "backend/**"
+    #   - ".github/workflows/backend-build.yaml"
   pull_request:
     branches: [main]
-    paths:
-      - "backend/**"
+    # paths:
+    #   - "backend/**"
   workflow_dispatch:
 
 env:
