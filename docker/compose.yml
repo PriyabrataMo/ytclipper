@@ -5,6 +5,8 @@ services:
     image: ${BACKEND_IMAGE:-ghcr.io/priyabratamo/ytclipper/backend:latest}
     container_name: ytclipper-backend
     restart: unless-stopped
+    env_file:
+      - .env
     environment:
       - PORT=${BACKEND_PORT:-8080}
       - ENV=${ENV:-staging}
