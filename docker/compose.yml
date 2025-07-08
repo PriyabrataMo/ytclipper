@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   backend:
-    image: ${BACKEND_IMAGE:-ghcr.io/PriyabrataMo/ytclipper/backend:latest}
+    image: ${BACKEND_IMAGE:-ghcr.io/priyabratamo/ytclipper/backend:latest}
     container_name: ytclipper-backend
     restart: unless-stopped
     env_file:
