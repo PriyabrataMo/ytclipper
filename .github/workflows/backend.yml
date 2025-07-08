@@ -17,8 +17,19 @@ env:
   IMAGE_NAME: ${{ github.repository }}/backend
 
 jobs:
+  preflight:
+    name: 🚦 Preflight
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          echo "EVENT    = ${{ github.event_name }}"
+          echo "REF      = ${{ github.ref }}"
+          echo "PR HEAD  = ${{ github.event.pull_request.head.ref }}"
+          echo "-------------------------"
+
   pr-check:
     name: 🧪 PR Check (Lint & Test)
+    needs: preflight
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request_target'
     steps:
