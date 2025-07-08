@@ -99,7 +99,27 @@ func SetupRouter(db *database.Database, cfg *config.Config) *gin.Engine {
 		protected.Use(auth.RequireAuth(&cfg.Auth0))
 		{
 			protected.GET("/profile", func(c *gin.Context) {
-				middleware.RespondWithOK(c, gin.H{"message": "Profile endpoint - to be implemented"})
+				// Get user ID from context
+				userID, exists := auth.GetUserID(c)
+				if !exists {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "User ID not found"})
+					return
+				}
+
+				// Get full claims if needed
+				claims, exists := auth.GetClaims(c)
+				if !exists {
+					c.JSON(http.StatusInternalServerError, gin.H{"error": "Claims not found"})
+					return
+				}
+
+				c.JSON(http.StatusOK, gin.H{
+					"message":    "This is a protected route",
+					"user_id":    userID,
+					"email":      claims.RegisteredClaims.Subject,
+					"issued_at":  claims.RegisteredClaims.IssuedAt,
+					"expires_at": claims.RegisteredClaims.Expiry,
+				})
 			})
 		}
 	}

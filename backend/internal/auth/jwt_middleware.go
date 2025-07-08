@@ -129,3 +129,23 @@ func RequireAuth(cfg *config.Auth0Config) gin.HandlerFunc {
 		c.Next()
 	}
 }
+
+func GetUserID(c *gin.Context) (string, bool) {
+	userID, exists := c.Get("user_id")
+	if !exists {
+		return "", false
+	}
+
+	userIDStr, ok := userID.(string)
+	return userIDStr, ok
+}
+
+func GetClaims(c *gin.Context) (*validator.ValidatedClaims, bool) {
+	claims, exists := c.Get("claims")
+	if !exists {
+		return nil, false
+	}
+
+	validatedClaims, ok := claims.(*validator.ValidatedClaims)
+	return validatedClaims, ok
+}

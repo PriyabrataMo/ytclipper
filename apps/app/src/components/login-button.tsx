@@ -18,7 +18,11 @@ const LoginButton = () => {
 
   return (
     <Button
-      onClick={() => loginWithRedirect()}
+      onClick={() => loginWithRedirect({
+        authorizationParams: {
+          redirect_uri: `${window.location.origin}`,
+        }
+      })}
       className="bg-blue-600 hover:bg-blue-700 text-white"
     >
       Log In
