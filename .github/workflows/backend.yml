@@ -149,7 +149,9 @@ jobs:
 
           cp docker/compose.yml deploy-temp/
           cp backend/.env.example deploy-temp/.env
-          echo "BACKEND_IMAGE=ghcr.io/${{ github.repository }}/backend:${{ steps.context.outputs.safe_branch }}" >> deploy-temp/.env
+
+          REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+          echo "BACKEND_IMAGE=ghcr.io/$REPO_LOWER/backend:${{ steps.context.outputs.safe_branch }}" >> deploy-temp/.env
           echo "DB_URL=${{ secrets.DB_URL }}" >> deploy-temp/.env
           echo "REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}" >> deploy-temp/.env
 
@@ -185,9 +187,15 @@ jobs:
             echo "Files in deployment directory:"
             ls -la
 
+            echo "Printing .env"
+            cat .env
+
+            echo "Checking docker compose config"
+            docker compose config | grep image
+
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
 
-            docker compose pull
-            docker compose up -d --no-deps backend
+            docker compose -f compose.yml pull
+            docker compose up -f compose.yml -d --no-deps backend
 
             docker ps
