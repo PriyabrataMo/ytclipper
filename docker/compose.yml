@@ -9,9 +9,6 @@ services:
       - .env
     ports:
       - '8080:8080'
-    depends_on:
-      - postgres
-      - redis
     networks:
       - ytclipper-network
     healthcheck:
@@ -55,8 +52,6 @@ services:
       retries: 3
 
 volumes:
-  postgres_data:
-    driver: local
   redis_data:
     driver: local
 
