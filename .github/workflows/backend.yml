@@ -195,7 +195,6 @@ jobs:
 
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
 
-            docker compose -f compose.yml pull
-            docker compose up -f compose.yml -d --no-deps backend
+            docker compose -f compose.yml up -d --no-deps backend
 
             docker ps
