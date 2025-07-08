@@ -145,9 +145,9 @@ jobs:
 
       - name: Create .env file locally
         run: |
-          mkdir deploy-artifacts
+          mkdir -p deploy-artifacts
           cp backend/.env.example deploy-artifacts/.env
-          echo "BACKEND_IMAGE=ghcr.io/${{ github.repository }}/backend:${{ steps.context.outputs.safe_branch }}" > deploy-artifacts/.env
+          echo "BACKEND_IMAGE=ghcr.io/${{ github.repository }}/backend:${{ steps.context.outputs.safe_branch }}" >> deploy-artifacts/.env
           echo "DB_URL=${{ secrets.DB_URL }}" >> deploy-artifacts/.env
           echo "REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}" >> deploy-artifacts/.env
 
