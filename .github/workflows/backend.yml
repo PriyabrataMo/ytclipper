@@ -1,0 +1,149 @@
+name: Backend CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - "**"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}/backend
+
+jobs:
+  pr-check:
+    name: 🧪 PR Check (Lint & Test)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run tests
+        run: |
+          echo "Pretend we're running tests here..."
+  build:
+    name: 🏗️ Build & Push Docker
+    runs-on: ubuntu-latest
+    needs: pr-check
+
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.merged == true }}
+
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+      image-digest: ${{ steps.build.outputs.digest }}
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha
+            type=raw,value=latest,enable={{is_default_branch}}
+          flavor: |
+            latest=false
+            prefix=
+            suffix=
+
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # cache-from: type=gha
+          # cache-to: type=gha,mode=max
+          platforms: linux/amd64
+
+      - name: Generate build summary
+        run: |
+          echo "## 🏗️ Backend Build Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Image**: \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Tags**: \`${{ steps.meta.outputs.tags }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **Digest**: \`${{ steps.build.outputs.digest }}\`" >> $GITHUB_STEP_SUMMARY
+
+  deploy:
+    name: 🚀 Deploy to VPS
+    runs-on: ubuntu-latest
+    needs: build
+    if: ${{ github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch' }}
+
+    steps:
+      - name: Extract deploy context
+        id: context
+        run: |
+          BRANCH=${GITHUB_REF#refs/heads/}
+          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+
+          if [ "$BRANCH" = "main" ]; then
+            echo "env=production" >> $GITHUB_OUTPUT
+            echo "port=8080" >> $GITHUB_OUTPUT
+            echo "domain=api.ytclipper.dev" >> $GITHUB_OUTPUT
+            echo "compose_dir=/opt/ytclipper" >> $GITHUB_OUTPUT
+          else
+            safe_branch=$(echo "$BRANCH" | tr '/' '-')
+            echo "env=staging" >> $GITHUB_OUTPUT
+            echo "port=$((9000 + RANDOM % 1000))" >> $GITHUB_OUTPUT
+            echo "domain=$safe_branch.ytclipper.dev" >> $GITHUB_OUTPUT
+            echo "compose_dir=/opt/ytclipper-staging/$safe_branch" >> $GITHUB_OUTPUT
+            echo "safe_branch=$safe_branch" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Deploy via SSH to VPS
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -e
+
+            BRANCH="${{ steps.context.outputs.branch }}"
+            ENV="${{ steps.context.outputs.env }}"
+            PORT="${{ steps.context.outputs.port }}"
+            DIR="${{ steps.context.outputs.compose_dir }}"
+            DOMAIN="${{ steps.context.outputs.domain }}"
+            IMAGE="ghcr.io/${{ github.repository }}/backend:$BRANCH"
+
+            echo "Deploying $BRANCH to $DOMAIN:$PORT"
+            mkdir -p "$DIR"
+            cd "$DIR"
+
+            echo "BACKEND_IMAGE=$IMAGE" > .env
+            echo "DB_NAME=ytclipper" >> .env
+            echo "DB_USER=postgres" >> .env
+            echo "DB_PASSWORD=${{ secrets.DB_PASSWORD }}" >> .env
+            echo "REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}" >> .env
+
+            curl -s -o compose.yaml "https://raw.githubusercontent.com/${{ github.repository }}/main/docker/compose.yaml"
+
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            docker compose pull
+            docker compose up -d
