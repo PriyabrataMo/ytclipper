@@ -159,7 +159,7 @@ jobs:
 
           REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
           echo "BACKEND_IMAGE=ghcr.io/$REPO_LOWER/backend:${{ steps.context.outputs.safe_branch }}" >> deploy-temp/.env
-          echo "\n# Backend Configuration" >> deploy-temp/.env
+          echo "# Backend Configuration" >> deploy-temp/.env
 
           if [ "${{ steps.context.outputs.env }}" = "production" ]; then
             echo "Using PRODUCTION secrets..."
