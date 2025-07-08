@@ -14,6 +14,7 @@ services:
       - LOG_PRETTY=${LOG_PRETTY:-true}
       - API_TIMEOUT=${API_TIMEOUT:-30s}
       - AUTH0_SCOPE='openid profile email'
+      - GIN_MODE=${GIN_MODE:-release}
     ports:
       - '${BACKEND_PORT:-8080}:8080'
     networks:
