@@ -120,6 +120,9 @@ jobs:
       (github.event_name == 'pull_request_target')
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Extract deploy context
         id: context
         run: |
@@ -140,7 +143,23 @@ jobs:
             echo "safe_branch=$safe_branch" >> $GITHUB_OUTPUT
           fi
 
-      - name: Deploy via SSH to VPS
+      - name: Create .env file locally
+        run: |
+          mkdir deploy-artifacts
+          echo "BACKEND_IMAGE=ghcr.io/${{ github.repository }}/backend:${{ steps.context.outputs.safe_branch }}" > deploy-artifacts/.env
+          echo "DB_URL=${{ secrets.DB_URL }}" >> deploy-artifacts/.env
+          echo "REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}" >> deploy-artifacts/.env
+
+      - name: Upload files to VPS
+        uses: appleboy/scp-action@v0.1.4
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: "docker/compose.yaml,deploy-artifacts/.env"
+          target: "${{ steps.context.outputs.compose_dir }}"
+
+      - name: SSH into VPS and deploy
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -148,37 +167,7 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
             set -e
-
-            BRANCH="${{ steps.context.outputs.branch }}"
-            ENV="${{ steps.context.outputs.env }}"
-            PORT="${{ steps.context.outputs.port }}"
-            DIR="${{ steps.context.outputs.compose_dir }}"
-            DOMAIN="${{ steps.context.outputs.domain }}"
-            SAFE_BRANCH="${{ steps.context.outputs.safe_branch }}"
-
-
-            IMAGE="ghcr.io/${{ github.repository }}/backend:$SAFE_BRANCH"
-
-            echo "Deploying $BRANCH to $DOMAIN:$PORT"
-            mkdir -p "$DIR"
-            cd "$DIR"
-
-            cat <<EOF > .env
-            echo "BACKEND_IMAGE=$IMAGE" > .env
-            echo "DB_URL=${{ secrets.DB_URL }}" >> .env
-            echo "REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}" >> .env
-
-            if [ "${{ github.event_name }}" = "push" ]; then
-              REF="${{ github.ref_name }}"
-            elif [ "${{ github.event_name }}" = "pull_request_target" ]; then
-              REF="${{ github.event.pull_request.head.ref }}"
-            else
-              REF="main"
-            fi
-
-            curl -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
-            -s -o compose.yaml \
-            "https://raw.githubusercontent.com/${{ github.repository }}/$REF/docker/compose.yaml"
+            cd ${{ steps.context.outputs.compose_dir }}
 
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
 
