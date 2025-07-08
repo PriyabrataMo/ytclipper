@@ -251,8 +251,20 @@ jobs:
             docker compose -f compose.yml --env-file .env up -d --no-deps backend
 
       - name: 💬 Comment on PR/Commit
-        uses: thollander/actions-comment-pull-request@v3
+        uses: actions/github-script@v7
+        if: |
+          github.event_name == 'pull_request_target'  ||
+          github.event_name == 'push' && github.ref != 'refs/heads/main'
         with:
-          message: |
-            🚀 **Deployed to Staging/Branch Successfully**
+          script: |
+            const message = `🚀 **Staging Deployed Successfully**
             🔗 **URL**: [https://${{ steps.context.outputs.domain }}](https://${{ steps.context.outputs.domain }})
+            📦 **Branch**: \`${{ steps.context.outputs.safe_branch }}\`
+            🔢 **Port**: \`${{ steps.context.outputs.port }}\``;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: message
+            });
