@@ -175,6 +175,10 @@ jobs:
     environment:
       name: staging
 
+    permissions:
+      pull-requests: write
+      contents: write
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -205,6 +209,7 @@ jobs:
 
           REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
           echo "BACKEND_IMAGE=ghcr.io/$REPO_LOWER/backend:${{ steps.context.outputs.safe_branch }}" >> deploy-temp/.env
+          echo "BACKEND_PORT=${{ steps.context.outputs.port }}" >> deploy-temp/.env
           echo "PORT=${{ steps.context.outputs.port }}" >> deploy-temp/.env
 
           echo "DATABASE_URL=${{ secrets.DATABASE_URL }}" >> deploy-temp/.env
@@ -242,6 +247,7 @@ jobs:
           script: |
             cd ${{ steps.context.outputs.compose_dir }}
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
+            docker compose down
             docker compose -f compose.yml --env-file .env up -d --no-deps backend
 
       - name: 💬 Comment on PR/Commit
@@ -316,7 +322,7 @@ jobs:
   #           echo "AUTH0_CLIENT_SECRET=${{ secrets.AUTH0_CLIENT_SECRET }}" >> deploy-temp/.env
   #           echo "AUTH0_AUDIENCE=${{ secrets.AUTH0_AUDIENCE }}" >> deploy-temp/.env
   #           echo "AUTH0_CALLBACK_URL=${{ secrets.AUTH0_CALLBACK_URL }}" >> deploy-temp/.env
-  #           echo "PORT=${{ steps.context.outputs.port }}" >> deploy-temp/.env
+  #           echo "BACKEND_PORT=${{ steps.context.outputs.port }}" >> deploy-temp/.env
   #         fi
 
   #     - name: Create target directory on VPS
