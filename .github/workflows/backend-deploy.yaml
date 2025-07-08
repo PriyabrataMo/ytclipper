@@ -1,0 +1,70 @@
+name: Backend Deploy to VPS
+
+on:
+  workflow_run:
+    workflows: ["backend-build-and-push"]
+    types:
+      - completed
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy Backend to VPS
+    runs-on: ubuntu-latest
+
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    steps:
+      - name: Extract deploy context
+        id: context
+        run: |
+          BRANCH=${GITHUB_REF#refs/heads/}
+          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+
+          if [ "$BRANCH" = "main" ]; then
+            echo "env=production" >> $GITHUB_OUTPUT
+            echo "port=8080" >> $GITHUB_OUTPUT
+            echo "domain=api.ytclipper.dev" >> $GITHUB_OUTPUT
+            echo "compose_dir=/opt/ytclipper" >> $GITHUB_OUTPUT
+          else
+            safe_branch=$(echo "$BRANCH" | tr '/' '-')
+            echo "env=staging" >> $GITHUB_OUTPUT
+            echo "port=$((9000 + RANDOM % 1000))" >> $GITHUB_OUTPUT
+            echo "domain=$safe_branch.ytclipper.dev" >> $GITHUB_OUTPUT
+            echo "compose_dir=/opt/ytclipper-staging/$safe_branch" >> $GITHUB_OUTPUT
+            echo "safe_branch=$safe_branch" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Deploy via SSH to VPS
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -e
+
+            BRANCH="${{ steps.context.outputs.branch }}"
+            ENV="${{ steps.context.outputs.env }}"
+            PORT="${{ steps.context.outputs.port }}"
+            DIR="${{ steps.context.outputs.compose_dir }}"
+            DOMAIN="${{ steps.context.outputs.domain }}"
+            SAFE_BRANCH="${{ steps.context.outputs.safe_branch }}"
+            IMAGE="ghcr.io/${{ github.repository }}/backend:$BRANCH"
+
+            echo "🚀 Deploying branch '$BRANCH' ($ENV) to $DOMAIN:$PORT"
+            mkdir -p "$DIR"
+            cd "$DIR"
+
+            echo "📦 Writing .env"
+            cat <<EOF > .env
+
+            BACKEND_IMAGE=$IMAGE
+            DB_NAME=ytclipper
+            DB_USER=postgres
+            DB_PASSWORD=your_db_password
+            REDIS_PASSWORD=your_redis_password
+            EOF
+
+            echo "📄 Downloading compose.yaml from GitHub"
+            curl -s -o compose.yaml "https://raw.githubuser
