@@ -143,22 +143,34 @@ jobs:
             echo "safe_branch=$safe_branch" >> $GITHUB_OUTPUT
           fi
 
-      - name: Create .env file locally
+      - name: Create deployment artifacts
         run: |
-          mkdir -p deploy-artifacts
-          cp backend/.env.example deploy-artifacts/.env
-          echo "BACKEND_IMAGE=ghcr.io/${{ github.repository }}/backend:${{ steps.context.outputs.safe_branch }}" >> deploy-artifacts/.env
-          echo "DB_URL=${{ secrets.DB_URL }}" >> deploy-artifacts/.env
-          echo "REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}" >> deploy-artifacts/.env
+          mkdir -p deploy-temp
 
-      - name: Upload files to VPS
+          cp docker/compose.yml deploy-temp/
+          cp backend/.env.example deploy-temp/.env
+          echo "BACKEND_IMAGE=ghcr.io/${{ github.repository }}/backend:${{ steps.context.outputs.safe_branch }}" >> deploy-temp/.env
+          echo "DB_URL=${{ secrets.DB_URL }}" >> deploy-temp/.env
+          echo "REDIS_PASSWORD=${{ secrets.REDIS_PASSWORD }}" >> deploy-temp/.env
+
+      - name: Create target directory on VPS
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            mkdir -p ${{ steps.context.outputs.compose_dir }}
+
+      - name: Upload deployment files to VPS
         uses: appleboy/scp-action@v0.1.4
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
-          source: "./docker/compose.yml,./deploy-artifacts/.env"
+          source: "deploy-temp/*"
           target: "${{ steps.context.outputs.compose_dir }}"
+          strip_components: 1
 
       - name: SSH into VPS and deploy
         uses: appleboy/ssh-action@master
@@ -170,7 +182,12 @@ jobs:
             set -e
             cd ${{ steps.context.outputs.compose_dir }}
 
+            echo "Files in deployment directory:"
+            ls -la
+
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
 
             docker compose pull
-            docker compose up -d
+            docker compose up -d --no-deps backend
+
+            docker ps
