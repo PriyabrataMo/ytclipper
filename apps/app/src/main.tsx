@@ -32,6 +32,7 @@ const config = {
 
 const currentConfig = config[ENV as keyof typeof config];
 
+console.log("Environment:", ENV, "Config:", currentConfig);
 const { auth0Domain, auth0ClientId, auth0Audience } = currentConfig;
 
 const onRedirectCallback = (appState: AppState | undefined) => {

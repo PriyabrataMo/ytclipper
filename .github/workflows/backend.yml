@@ -314,7 +314,7 @@ jobs:
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
 
             CONTAINER_SUFFIX=${{ steps.context.outputs.safe_branch }}
-            API_CONTAINER_NAME="ytclipper-${CONTAINER_SUFFIX}-api"
+            API_CONTAINER_NAME="ytclipper-${CONTAINER_SUFFIX}-backend"
 
             echo "Checking for the existing container: $API_CONTAINER_NAME"
 
