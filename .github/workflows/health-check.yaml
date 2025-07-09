@@ -20,15 +20,11 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
             set -euo pipefail
-
             echo "🩺 Starting health checks for ytclipper production"
 
-            COMPOSE_DIR="/opt/ytclipper"
-            COMPOSE_FILE="$COMPOSE_DIR/compose.yml"
-
-            # 1. Check running containers
-            echo "📦 Checking running containers..."
-            docker compose -f "$COMPOSE_FILE" ps
+            # 1. Check Docker services
+            echo "📦 Checking Docker services..."
+            docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 
             # 2. Backend health check
             echo "🔁 Checking backend health at http://localhost:8080/health"
@@ -39,21 +35,21 @@ jobs:
               exit 1
             fi
 
-            # 3. Frontend health check
+            # 3. Database health check via backend endpoint
+            echo "🐘 Checking database health at http://localhost:8080/db-health"
+            if curl --fail --silent --max-time 5 http://localhost:8080/db-health; then
+              echo "✅ Database connection is healthy"
+            else
+              echo "❌ Database health check failed"
+              exit 1
+            fi
+
+            # 4. Frontend health check
             echo "🌐 Checking frontend health at http://localhost:3000/"
             if curl --fail --silent --max-time 5 http://localhost:3000/; then
               echo "✅ Frontend is healthy"
             else
               echo "❌ Frontend health check failed"
-              exit 1
-            fi
-
-            # 4. Postgres health check
-            echo "🐘 Checking Postgres container with pg_isready"
-            if docker compose -f "$COMPOSE_FILE" exec -T postgres pg_isready; then
-              echo "✅ Database is healthy"
-            else
-              echo "❌ Database health check failed"
               exit 1
             fi
 
@@ -64,12 +60,19 @@ jobs:
         run: |
           echo "## ✅ All Services Healthy" >> $GITHUB_STEP_SUMMARY
           echo "- Backend: 🟢 Healthy" >> $GITHUB_STEP_SUMMARY
-          echo "- Frontend: 🟢 Healthy" >> $GITHUB_STEP_SUMMARY
           echo "- Database: 🟢 Healthy" >> $GITHUB_STEP_SUMMARY
+          echo "- Frontend: 🟢 Healthy" >> $GITHUB_STEP_SUMMARY
+          echo "- Last check: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
 
       - name: ❌ Alert on Failure
         if: failure()
         run: |
           echo "## ❌ Health Check Failed" >> $GITHUB_STEP_SUMMARY
-          echo "- One or more services are **unhealthy**." >> $GITHUB_STEP_SUMMARY
-          echo "- Check VPS logs via SSH or Docker logs." >> $GITHUB_STEP_SUMMARY
+          echo "- One or more services are **unhealthy**" >> $GITHUB_STEP_SUMMARY
+          echo "- Failure time: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "### Troubleshooting Steps:" >> $GITHUB_STEP_SUMMARY
+          echo "1. Check container status: \`docker ps -a\`" >> $GITHUB_STEP_SUMMARY
+          echo "2. View backend logs: \`docker logs ytclipper-backend\`" >> $GITHUB_STEP_SUMMARY
+          echo "3. Check database connection: \`psql \$DATABASE_URL -c 'SELECT 1'\`" >> $GITHUB_STEP_SUMMARY
+          echo "4. View frontend logs: \`docker logs ytclipper-frontend\`" >> $GITHUB_STEP_SUMMARY
+          echo "5. Check Nginx status: \`sudo systemctl status nginx\`" >> $GITHUB_STEP_SUMMARY
