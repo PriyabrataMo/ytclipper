@@ -9,7 +9,7 @@ help: ## Show this help message
 
 # Development
 dev: ## Start development environment
-	docker compose -f docker/compose.dev.yml up --build
+	docker compose -f docker/compose.dev.yml up
 
 dev-detached: ## Start development environment in detached mode
 	docker compose -f docker/compose.dev.yml up --build -d
