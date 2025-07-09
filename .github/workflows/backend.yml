@@ -312,8 +312,18 @@ jobs:
           script: |
             cd ${{ steps.context.outputs.compose_dir }}
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
-            docker compose -p ytclipper-${CONTAINER_SUFFIX}-api -f compose.yml --env-file .env down
-            docker compose -p ytclipper-${CONTAINER_SUFFIX}-api -f compose.yml --env-file .env up -d --no-deps backend
+
+            CONTAINER_SUFFIX=${{ steps.context.outputs.safe_branch }}
+            API_CONTAINER_NAME="ytclipper-${CONTAINER_SUFFIX}-api"
+
+            echo "Checking for the existing container: $API_CONTAINER_NAME"
+
+            if [ "$(docker ps -aq -f name=^/${API_CONTAINER_NAME}$)" ]; then
+              echo "Stopping existing container: $API_CONTAINER_NAME"
+              docker rm -f $API_CONTAINER_NAME
+            fi
+
+            docker compose -p $API_CONTAINER_NAME -f compose.yml --env-file .env up -d --no-deps backend
 
       - name: Configure Nginx for subdomain
         uses: appleboy/ssh-action@master
