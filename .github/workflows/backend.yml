@@ -6,11 +6,19 @@ on:
       - main
       - staging
       - "**"
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend.yml"
+      - "docker/**"
 
   pull_request_target:
     branches:
       - main
       - staging
+    paths:
+      - "backend/**"
+      - ".github/workflows/backend.yml"
+      - "docker/**"
   workflow_dispatch:
 
 env:
