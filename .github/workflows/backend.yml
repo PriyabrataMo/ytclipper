@@ -323,7 +323,7 @@ jobs:
               docker rm -f $API_CONTAINER_NAME
             fi
 
-            docker compose --pull always -p $API_CONTAINER_NAME -f compose.yml --env-file .env up -d --no-deps backend
+            docker compose -p $API_CONTAINER_NAME -f compose.yml --env-file .env up -d --no-deps backend
 
       - name: Configure Nginx for subdomain
         uses: appleboy/ssh-action@master

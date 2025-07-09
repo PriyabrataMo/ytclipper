@@ -332,7 +332,7 @@ jobs:
               docker rm -f $APP_CONTAINER_NAME
             fi
 
-            docker compose --pull always -p $APP_CONTAINER_NAME -f compose.yml --env-file .env up -d --no-deps app
+            docker compose -p $APP_CONTAINER_NAME -f compose.yml --env-file .env up -d --no-deps app
 
       - name: Configure Nginx for subdomain
         uses: appleboy/ssh-action@master
