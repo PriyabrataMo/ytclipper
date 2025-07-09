@@ -1,28 +1,29 @@
-name: 🧹 Cleanup After PR Merge
+name: 🧹 Unified Cleanup After PR Merge
 
 on:
   pull_request:
     types: [closed]
     paths:
       - "backend/**"
+      - "apps/app/**"
+      - "packages/ui/**"
       - ".github/workflows/cleanup-after-pr.yml"
       - "docker/**"
 
 jobs:
   cleanup:
-    name: Cleanup on PR Merge
+    name: Cleanup Both Services on PR Merge
     runs-on: ubuntu-latest
-
-    if: github.event.pull_request.merged == true # Only on merge
+    if: github.event.pull_request.merged == true
 
     steps:
       - name: Extract Branch Name
         id: extract
         run: |
           BRANCH="${{ github.event.pull_request.head.ref }}"
-          SAFE_BRANCH=$(echo "$BRANCH" | tr '/' '-')
-          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+          SAFE_BRANCH=$(echo "$BRANCH" | tr '/' '-' | tr '[:upper:]' '[:lower:]')
           echo "safe_branch=$SAFE_BRANCH" >> $GITHUB_OUTPUT
+          echo "Cleaning up resources for branch: $SAFE_BRANCH"
 
       - name: Cleanup from VPS
         uses: appleboy/ssh-action@master
@@ -32,21 +33,50 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
             SAFE_BRANCH="${{ steps.extract.outputs.safe_branch }}"
-            COMPOSE_DIR="/opt/ytclipper-staging/$SAFE_BRANCH"
-            CONTAINER_NAME="ytclipper-$SAFE_BRANCH-backend"
-            DOMAIN="api.$SAFE_BRANCH.ytclipper.com"
 
-            echo "🔍 Cleaning up deployment for branch: $SAFE_BRANCH"
+            # Skip cleanup for protected branches
+            if [[ "$SAFE_BRANCH" == "main" || "$SAFE_BRANCH" == "staging" ]]; then
+              echo "⏩ Skipping cleanup for protected branch: $SAFE_BRANCH"
+              exit 0
+            fi
 
-            # Stop and remove container if exists
-            docker rm -f $CONTAINER_NAME || true
+            echo "🔍 Starting cleanup for branch: $SAFE_BRANCH"
 
-            # Remove compose directory
-            rm -rf $COMPOSE_DIR
+            # Backend resources
+            BACKEND_CONTAINER="backend${SAFE_BRANCH}"
+            BACKEND_COMPOSE_DIR="/opt/ytclipper-staging/$SAFE_BRANCH"
+            BACKEND_DOMAIN="api.$SAFE_BRANCH.ytclipper.com"
 
-            # Remove Nginx config and reload
-            sudo rm -f /etc/nginx/sites-available/$DOMAIN
-            sudo rm -f /etc/nginx/sites-enabled/$DOMAIN
-            sudo nginx -t && sudo systemctl reload nginx
+            # Frontend resources
+            FRONTEND_CONTAINER="frontend${SAFE_BRANCH}"
+            FRONTEND_COMPOSE_DIR="/opt/ytclipper-frontend-staging/$SAFE_BRANCH"
+            FRONTEND_DOMAIN="$SAFE_BRANCH.ytclipper.com"
 
-            echo "✅ Cleanup completed for $SAFE_BRANCH"
+            # Remove Docker containers
+            docker rm -f $BACKEND_CONTAINER $FRONTEND_CONTAINER || true
+
+            # Remove deployment directories
+            rm -rf "$BACKEND_COMPOSE_DIR" "$FRONTEND_COMPOSE_DIR"
+
+            # Remove Nginx configurations
+            sudo rm -f "/etc/nginx/sites-available/$BACKEND_DOMAIN" \
+                       "/etc/nginx/sites-enabled/$BACKEND_DOMAIN" \
+                       "/etc/nginx/sites-available/$FRONTEND_DOMAIN" \
+                       "/etc/nginx/sites-enabled/$FRONTEND_DOMAIN"
+
+            # Prune unused Docker images
+            docker image prune -af --filter "label=org.opencontainers.image.title=*$SAFE_BRANCH*"
+
+            # Reload Nginx if configs changed
+            if sudo nginx -t; then
+              sudo systemctl reload nginx
+              echo "♻️ Nginx reloaded successfully"
+            else
+              echo "⚠️ Nginx config test failed - check configs manually"
+            fi
+
+            echo "✅ Unified cleanup completed for $SAFE_BRANCH"
+            echo "Removed:"
+            echo "- Containers: $BACKEND_CONTAINER, $FRONTEND_CONTAINER"
+            echo "- Directories: $BACKEND_COMPOSE_DIR, $FRONTEND_COMPOSE_DIR"
+            echo "- Domains: $BACKEND_DOMAIN, $FRONTEND_DOMAIN"

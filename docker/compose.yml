@@ -30,7 +30,7 @@ services:
     container_name: ytclipper-${CONTAINER_SUFFIX:-default}-app
     restart: unless-stopped
     ports:
-      - '3000:80'
+      - '${FRONTEND_PORT:-3000}:80'
     depends_on:
       - backend
     networks:

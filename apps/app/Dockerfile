@@ -1,36 +1,34 @@
 # Build stage
-FROM node:18-alpine AS builder
-
-# Set working directory
+FROM node:24-alpine AS builder
 WORKDIR /app
 
-# Copy package files
-COPY package*.json ./
+# Copy necessary files for dependency installation
+COPY pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY package.json ./
+COPY turbo.json ./
+COPY apps/app/package.json ./apps/app/
+COPY packages/ui/package.json ./packages/ui/
 
-# Install dependencies
-RUN npm install
+RUN corepack enable && corepack prepare pnpm@latest --activate
 
-# Copy source code
-COPY . .
+# Install dependencies using pnpm
+RUN pnpm install --frozen-lockfile
 
-# Build the application
-RUN npm run build
+# Copy application source code
+COPY apps/app/ ./apps/app/
+COPY packages/ui/ ./packages/ui/
 
-# Production stage
+# Build the UI package and the app
+RUN pnpm turbo run build --filter=ui --filter=app
+
+# Runtime stage
 FROM nginx:alpine
 
-# Copy custom nginx config
-COPY nginx.conf /etc/nginx/nginx.conf
+# Copy built app from builder stage
+COPY --from=builder /app/apps/app/dist /usr/share/nginx/html
 
-# Copy built app to nginx
-COPY --from=builder /app/dist /usr/share/nginx/html
+# Copy custom nginx configuration
+COPY --from=builder /app/apps/app/nginx.conf /etc/nginx/default.conf
 
-# Expose port 80
 EXPOSE 80
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:80 || exit 1
-
-# Start nginx
-CMD ["nginx", "-g", "daemon off;"] 
+CMD ["nginx", "-g", "daemon off;"]
