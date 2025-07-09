@@ -321,8 +321,8 @@ jobs:
           script: |
             cd ${{ steps.context.outputs.compose_dir }}
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
-            docker compose down --remove-orphans
-            docker compose -f compose.yml --env-file .env up -d --no-deps app
+            docker compose -p ytclipper-${CONTAINER_SUFFIX}-app -f compose.yml --env-file .env down
+            docker compose -p ytclipper-${CONTAINER_SUFFIX}-app -f compose.yml --env-file .env up -d --no-deps app
 
       - name: Configure Nginx for subdomain
         uses: appleboy/ssh-action@master
