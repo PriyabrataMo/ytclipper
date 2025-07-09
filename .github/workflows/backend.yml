@@ -304,26 +304,33 @@ jobs:
           echo "🔢 Port: ${{ steps.context.outputs.port }}"
 
   comment-pr:
+    name: Comment on PR with Deployment Summary
     runs-on: ubuntu-latest
     needs: [deploy-staging]
     steps:
+      - name: Set Deployment Time
+        run: echo "DEPLOYMENT_TIME=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_ENV
+
       - name: Post Deployment Comment to PR
-        if: |
-          github.event_name == 'pull_request' || github.event_name == 'push'
+        if: github.event_name == 'pull_request'
         uses: actions/github-script@v7
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const { context, github } = require('@actions/github');
-            const prNumber = context.payload.pull_request.number;
+            const { github, context } = require('@actions/github');
+            const prNumber = context.payload.pull_request?.number;
+            if (!prNumber) {
+              console.log('No pull request number found, skipping comment.');
+              return;
+            }
             const commentBody = `
               **🚀 Deployment Status: Ready**
 
               🎉 Staging deployment created successfully!
 
-              - **🔗 URL**: https://${{ steps.context.outputs.domain }}
-              - **📦 Branch**: ${{ steps.context.outputs.safe_branch }}
-              - **🔢 Port**: ${{ steps.context.outputs.port }}
+              - **🔗 URL**: https://${{ needs.deploy-staging.outputs.deployment_url }}
+              - **📦 Branch**: ${{ needs.deploy-staging.outputs.deployment_branch }}
+              - **🔢 Port**: ${{ needs.deploy-staging.outputs.deployment_port }}
               - **🕒 Time**: ${{ env.DEPLOYMENT_TIME }} UTC
 
               _Deployed by GitHub Actions • Inspect or provide feedback below._
