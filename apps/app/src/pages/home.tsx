@@ -17,6 +17,9 @@ export default function HomePage() {
       <Card className="max-w-2xl mx-auto">
         <CardHeader>
           <CardTitle>Welcome to YT Clipper</CardTitle>
+          <p>auth0Domain {import.meta.env.VITE_AUTH0_DOMAIN}</p>
+          <p>auth0ClientId {import.meta.env.VITE_AUTH0_CLIENT_ID}</p>
+          <p>auth0Audience {import.meta.env.VITE_AUTH0_AUDIENCE}</p>
         </CardHeader>
         <CardContent className="space-y-4">
           <p className="text-gray-600">
