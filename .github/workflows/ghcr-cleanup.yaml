@@ -10,67 +10,50 @@ on:
 
 jobs:
   cleanup-ghcr:
-    name: 🧹 Cleanup GHCR Images
     runs-on: ubuntu-latest
 
+    env:
+      GHCR_PAT: ${{ secrets.GHCR_PAT }}
+      OWNER: ${{ github.repository_owner }}
+      PACKAGE: ytclipper/backend
+      DELETE_OLDER_THAN_DAYS: "0.5"
+
     steps:
-      - name: ✅ Install dependencies
+      - name: Delete older images except 'main' tag
         run: |
-          sudo apt-get update
-          sudo apt-get install -y jq
+          set -e
 
-      - name: 🛂 Authenticate GitHub CLI
-        env:
-          GHCR_PAT: ${{ secrets.GHCR_PAT }}
-        run: |
-          echo $GHCR_PAT | gh auth login --with-token
+          echo "📦 Fetching versions for $PACKAGE..."
 
-      - name: 📦 Cleanup old GHCR versions
-        env:
-          GHCR_PAT: ${{ secrets.GHCR_PAT }}
-          OWNER: ${{ github.repository_owner }}
-          PACKAGE_NAME: ytclipper/backend
-          KEEP: 5
-        run: |
           API="https://api.github.com"
-          ENCODED_PACKAGE=$(echo $PACKAGE_NAME | sed 's|/|%2F|g')
-          PACKAGE_URL="$API/users/$OWNER/packages/container/$ENCODED_PACKAGE/versions"
+          PACKAGE_URL="$API/users/$OWNER/packages/container/${PACKAGE//\//%2F}/versions"
 
-          echo "Fetching open PR branch names..."
-          OPEN_PR_BRANCHES=$(gh pr list --state open --json headRefName -q '.[].headRefName')
+          SECONDS_THRESHOLD=$(awk "BEGIN { print int(${DELETE_OLDER_THAN_DAYS} * 86400) }")
+          CUTOFF_UNIX=$(date -d "@$(( $(date +%s) - $SECONDS_THRESHOLD ))" +%s)
 
-          echo "Fetching all versions..."
-          VERSIONS=$(curl -s -H "Authorization: Bearer $GHCR_PAT" \
-                          -H "Accept: application/vnd.github+json" \
-                          "$PACKAGE_URL")
+          curl -s -H "Authorization: Bearer $GHCR_PAT" -H "Accept: application/vnd.github+json" "$PACKAGE_URL" |
+          jq -c '.[]' |
+          while read -r version; do
+            version_id=$(echo "$version" | jq '.id')
+            tags=$(echo "$version" | jq -r '.metadata.container.tags[]?')
+            created_at=$(echo "$version" | jq -r '.created_at')
+            created_at_unix=$(date -d "$created_at" +%s)
 
-          echo "$VERSIONS" | jq -c '.[]' | while read -r version; do
-            ID=$(echo "$version" | jq '.id')
-            TAGS=$(echo "$version" | jq -r '.metadata.container.tags[]')
+            # Skip if tagged as 'main'
+            if echo "$tags" | grep -q "^main$"; then
+              echo "⏩ Skipping version $version_id (tagged as 'main')"
+              continue
+            fi
 
-            DELETE=true
-
-            for TAG in $TAGS; do
-              if [[ "$TAG" == "main" || "$TAG" == "staging" ]]; then
-                DELETE=false
-              fi
-
-              for pr_branch in $OPEN_PR_BRANCHES; do
-                if [[ "$TAG" == "$pr_branch" ]]; then
-                  DELETE=false
-                fi
-              done
-            done
-
-            if [ "$DELETE" = true ]; then
-              echo "🗑️ Deleting version $ID (tags: $TAGS)"
+            if [ "$created_at_unix" -lt "$CUTOFF_UNIX" ]; then
+              echo "🗑️ Deleting version $version_id (created: $created_at)"
               curl -s -X DELETE \
                 -H "Authorization: Bearer $GHCR_PAT" \
                 -H "Accept: application/vnd.github+json" \
-                "$API/users/$OWNER/packages/container/$ENCODED_PACKAGE/versions/$ID"
+                "$PACKAGE_URL/$version_id"
             else
-              echo "⏭️ Skipping version $ID (tags: $TAGS)"
+              echo "⏩ Keeping version $version_id (created: $created_at)"
             fi
           done
 
-          echo "✅ Cleanup complete!"
+          echo "✅ GHCR cleanup complete."
