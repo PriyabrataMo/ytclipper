@@ -293,12 +293,44 @@ jobs:
       - name: 🎉 Deployment Summary
         id: deployment_summary
         run: |
-          echo "deployment_url=http://api.${{ steps.context.outputs.domain }}" >> $GITHUB_OUTPUT
+          echo "deployment_url=https://api.${{ steps.context.outputs.domain }}" >> $GITHUB_OUTPUT
           echo "deployment_port=${{ steps.context.outputs.port }}" >> $GITHUB_OUTPUT
           echo "deployment_branch=${{ steps.context.outputs.safe_branch }}" >> $GITHUB_OUTPUT
 
       - run: |
           echo "🎉 Staging Deployment was created successfully!"
-          echo "🔗 URL: https://${{ steps.context.outputs.domain }}"
+          echo "🔗 URL: https://api.${{ steps.context.outputs.domain }}"
           echo "📦 Branch: ${{ steps.context.outputs.safe_branch }}"
           echo "🔢 Port: ${{ steps.context.outputs.port }}"
+
+  comment-pr:
+    runs-on: ubuntu-latest
+    needs: [deploy-staging]
+    steps:
+      - name: Post Deployment Comment to PR
+        if: |
+          github.event_name == 'pull_request' || github.event_name == 'push'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { context, github } = require('@actions/github');
+            const prNumber = context.payload.pull_request.number;
+            const commentBody = `
+              **🚀 Deployment Status: Ready**
+
+              🎉 Staging deployment created successfully!
+
+              - **🔗 URL**: https://${{ steps.context.outputs.domain }}
+              - **📦 Branch**: ${{ steps.context.outputs.safe_branch }}
+              - **🔢 Port**: ${{ steps.context.outputs.port }}
+              - **🕒 Time**: ${{ env.DEPLOYMENT_TIME }} UTC
+
+              _Deployed by GitHub Actions • Inspect or provide feedback below._
+            `;
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              body: commentBody
+            });
