@@ -154,7 +154,7 @@ jobs:
 
           REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
           echo "FRONTEND_IMAGE=ghcr.io/$REPO_LOWER/frontend:main" >> deploy-temp/.env
-          echo "FRONTEND_PORT=8080" >> deploy-temp/.env
+          echo "FRONTEND_PORT=3000" >> deploy-temp/.env
           echo "CONTAINER_SUFFIX=${{ steps.context.outputs.safe_branch }}" >> deploy-temp/.env
 
       - name: Upload files to VPS
@@ -261,7 +261,7 @@ jobs:
             echo "domain=app-staging.ytclipper.com" >> $GITHUB_OUTPUT
             echo "compose_dir=/opt/ytclipper-frontend-staging" >> $GITHUB_OUTPUT
           else
-            RANDOM_PORT=$((8000 + RANDOM % 1000))
+            RANDOM_PORT=$((3001 + RANDOM % 1000))
             echo "port=$RANDOM_PORT" >> $GITHUB_OUTPUT
             echo "domain=$SAFE_BRANCH.ytclipper.com" >> $GITHUB_OUTPUT
             echo "compose_dir=/opt/ytclipper-staging/$SAFE_BRANCH" >> $GITHUB_OUTPUT
