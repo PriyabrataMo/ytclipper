@@ -273,7 +273,7 @@ jobs:
           else
             RANDOM_PORT=$((3001 + RANDOM % 1000))
             echo "port=$RANDOM_PORT" >> $GITHUB_OUTPUT
-            echo "domain=api-$SAFE_BRANCH.ytclipper.com" >> $GITHUB_OUTPUT
+            echo "domain=$SAFE_BRANCH.ytclipper.com" >> $GITHUB_OUTPUT
             echo "compose_dir=/opt/ytclipper-app-staging/$SAFE_BRANCH" >> $GITHUB_OUTPUT
           fi
 
