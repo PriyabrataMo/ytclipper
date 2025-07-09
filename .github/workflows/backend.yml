@@ -9,7 +9,7 @@ on:
     paths:
       - "backend/**"
       - ".github/workflows/backend.yml"
-      - "docker/**"
+      # - "docker/**"
 
   pull_request_target:
     branches:
@@ -18,7 +18,7 @@ on:
     paths:
       - "backend/**"
       - ".github/workflows/backend.yml"
-      - "docker/**"
+      # - "docker/**"
   workflow_dispatch:
 
 env:
