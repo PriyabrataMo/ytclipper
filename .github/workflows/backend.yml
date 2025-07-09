@@ -318,7 +318,6 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
-            const { github, context } = require('@actions/github');
             const prNumber = context.payload.pull_request?.number;
             if (!prNumber) {
               console.log('No pull request number found, skipping comment.');
