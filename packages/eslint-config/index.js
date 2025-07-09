@@ -63,7 +63,7 @@ export default tseslint.config([
       'import/no-unresolved': 'off', // TypeScript handles this
 
       // Code quality and consistency
-      'no-console': 'warn',
+      // 'no-console': 'warn',
       'no-debugger': 'error',
       'no-unused-vars': 'off', // Use TypeScript version
       '@typescript-eslint/no-unused-vars': [

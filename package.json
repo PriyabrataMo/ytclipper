@@ -42,19 +42,19 @@
   },
   "lint-staged": {
     "apps/app/src/**/*.{ts,tsx}": [
-      "cd apps/app && pnpm lint:fix",
+      "pnpm --filter app lint:fix",
       "prettier --write"
     ],
     "apps/landing/src/**/*.{ts,tsx}": [
-      "cd apps/landing && pnpm lint:fix",
+      "pnpm --filter landing lint:fix",
       "prettier --write"
     ],
     "packages/ui/**/*.{ts,tsx}": [
-      "cd packages/ui && pnpm lint:fix",
+      "pnpm --filter @ytclipper/ui lint:fixj",
       "prettier --write"
     ],
     "apps/extension/src/**/*.{ts,tsx}": [
-      "cd apps/extension && pnpm lint:fix",
+      "pnpm --filter @ytclipper/extension lint:fix",
       "prettier --write"
     ],
     "*.{json,css,scss,md,mdx}": [

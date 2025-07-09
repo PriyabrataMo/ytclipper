@@ -5,11 +5,7 @@ const LoginButton = () => {
   const { loginWithRedirect, isAuthenticated, isLoading } = useAuth0();
 
   if (isLoading) {
-    return (
-      <Button disabled>
-        Loading...
-      </Button>
-    );
+    return <Button disabled>Loading...</Button>;
   }
 
   if (isAuthenticated) {
@@ -18,12 +14,14 @@ const LoginButton = () => {
 
   return (
     <Button
-      onClick={() => loginWithRedirect({
-        authorizationParams: {
-          redirect_uri: `${window.location.origin}`,
-        }
-      })}
-      className="bg-blue-600 hover:bg-blue-700 text-white"
+      onClick={() => {
+        loginWithRedirect({
+          authorizationParams: {
+            redirect_uri: `${window.location.origin}`,
+          },
+        });
+      }}
+      className='bg-blue-600 hover:bg-blue-700 text-white'
     >
       Log In
     </Button>

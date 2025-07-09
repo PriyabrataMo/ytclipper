@@ -35,6 +35,7 @@ type UserInfo struct {
 func NewAuth0Service(cfg *config.Auth0Config) (*Auth0Service, error) {
 	ctx := context.Background()
 
+	fmt.Printf("Connecting to Auth0 domain: %s\n", cfg.Domain)
 	provider, err := oidc.NewProvider(ctx, "https://"+cfg.Domain+"/")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create OIDC provider: %w", err)

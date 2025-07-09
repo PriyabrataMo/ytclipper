@@ -146,6 +146,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Extract context
+        id: context
+        run: |
+          echo "safe_branch=main" >> $GITHUB_OUTPUT
+
       - name: Create deployment artifacts
         run: |
           mkdir -p deploy-temp
@@ -156,6 +161,11 @@ jobs:
           echo "FRONTEND_IMAGE=ghcr.io/$REPO_LOWER/frontend:main" >> deploy-temp/.env
           echo "FRONTEND_PORT=3000" >> deploy-temp/.env
           echo "CONTAINER_SUFFIX=${{ steps.context.outputs.safe_branch }}" >> deploy-temp/.env
+
+          echo "VITE_ENVIRONMENT=production" >> deploy-temp/.env
+          echo "VITE_AUTH0_CLIENT_ID=${{ secrets.VITE_AUTH0_CLIENT_ID }}" >> deploy-temp/.env
+          echo "VITE_AUTH0_DOMAIN=${{ secrets.VITE_AUTH0_DOMAIN }}" >> deploy-temp/.env
+          echo "VITE_AUTH0_AUDIENCE=${{ secrets.VITE_AUTH0_AUDIENCE }}" >> deploy-temp/.env
 
       - name: Upload files to VPS
         uses: appleboy/scp-action@v0.1.4
@@ -277,6 +287,11 @@ jobs:
           echo "FRONTEND_IMAGE=ghcr.io/$REPO_LOWER/frontend:${{ steps.context.outputs.safe_branch }}" >> deploy-temp/.env
           echo "FRONTEND_PORT=${{ steps.context.outputs.port }}" >> deploy-temp/.env
           echo "CONTAINER_SUFFIX=${{ steps.context.outputs.safe_branch }}" >> deploy-temp/.env
+
+          echo "VITE_ENVIRONMENT=staging" >> deploy-temp/.env
+          echo "VITE_AUTH0_CLIENT_ID=${{ secrets.VITE_AUTH0_CLIENT_ID }}" >> deploy-temp/.env
+          echo "VITE_AUTH0_DOMAIN=${{ secrets.VITE_AUTH0_DOMAIN }}" >> deploy-temp/.env
+          echo "VITE_AUTH0_AUDIENCE=${{ secrets.VITE_AUTH0_AUDIENCE }}" >> deploy-temp/.env
 
       - name: Create target dir on VPS
         uses: appleboy/ssh-action@master
