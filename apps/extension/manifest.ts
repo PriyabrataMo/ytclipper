@@ -20,7 +20,7 @@ const manifest: Manifest = {
     {
       matches: ['https://www.youtube.com/*', 'https://youtube.com/*'],
       js: ['src/content/index.js'],
-      css: ['src/content/content.css'],
+      css: ['assets/content.css'],
       run_at: 'document_end',
     },
   ],

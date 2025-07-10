@@ -13,6 +13,7 @@
     "dev:extension:firefox": "pnpm --filter @ytclipper/extension dev:firefox",
     "build": "turbo run build",
     "lint": "turbo run lint",
+    "build:extension": "pnpm --filter @ytclipper/extension build",
     "lint:fix": "turbo run lint:fix",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,css,scss,md,mdx}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,css,scss,md,mdx}\"",

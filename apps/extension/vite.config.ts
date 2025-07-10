@@ -1,23 +1,13 @@
-import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
+import { viteStaticCopy } from 'vite-plugin-static-copy';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 import manifest from './manifest';
-
-// Generate manifest.json
-const generateManifest = () => {
-  const outDir = path.resolve(__dirname, 'dist');
-  fs.mkdirSync(outDir, { recursive: true });
-  fs.writeFileSync(
-    path.resolve(outDir, 'manifest.json'),
-    JSON.stringify(manifest, null, 2),
-  );
-};
 
 export default defineConfig(({ mode }) => {
   const isProduction = mode === 'production';
@@ -28,9 +18,21 @@ export default defineConfig(({ mode }) => {
       {
         name: 'generate-manifest',
         buildStart() {
-          generateManifest();
+          this.emitFile({
+            type: 'asset',
+            fileName: 'manifest.json',
+            source: JSON.stringify(manifest, null, 2),
+          })
         },
       },
+      viteStaticCopy({
+        targets: [
+          {
+            src: '_locales',
+            dest: "",
+          }
+        ]
+      })
     ],
     define: {
       __DEV__: !isProduction,
@@ -64,9 +66,9 @@ export default defineConfig(({ mode }) => {
             const name = assetInfo.name || '';
             if (name.endsWith('.css')) {
               if (name.includes('content')) {
-                return 'src/content/content.css';
+                return 'assets/content.css';
               }
-              return 'src/[name].[ext]';
+              return 'assets/[name].[ext]';
             }
             return 'assets/[name].[ext]';
           },

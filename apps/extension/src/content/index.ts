@@ -1,4 +1,6 @@
 import { logger } from '@ytclipper/extension-dev-utils';
+import './content.css';
+import './style.css';
 
 // TypeScript interfaces
 interface Timestamp {

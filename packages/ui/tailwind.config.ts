@@ -6,6 +6,7 @@ const config: Config = {
   content: [
     './src/**/*.{js,ts,jsx,tsx,mdx}',
     '../../apps/app/src/**/*.{js,ts,jsx,tsx,mdx}',
+    '../../apps/extension/src/**/*.{js,ts,jsx,tsx,mdx}',
   ],
 };
 
