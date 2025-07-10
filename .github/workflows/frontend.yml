@@ -153,6 +153,11 @@ jobs:
         run: |
           echo "safe_branch=main" >> $GITHUB_OUTPUT
 
+      - name: Use digest from build-push
+        id: digest
+        run: |
+          echo "digest=${{ needs.build-push.outputs.image-digest }}" >> $GITHUB_OUTPUT
+
       - name: Create deployment artifacts
         run: |
           mkdir -p deploy-temp
@@ -160,7 +165,7 @@ jobs:
           touch deploy-temp/.env
 
           REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
-          echo "FRONTEND_IMAGE=ghcr.io/$REPO_LOWER/frontend:main" >> deploy-temp/.env
+          echo "FRONTEND_IMAGE=ghcr.io/$REPO_LOWER/frontend@${{ steps.digest.outputs.digest }}" >> deploy-temp/.env
           echo "FRONTEND_PORT=3000" >> deploy-temp/.env
           echo "CONTAINER_SUFFIX=${{ steps.context.outputs.safe_branch }}" >> deploy-temp/.env
 
