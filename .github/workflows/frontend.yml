@@ -289,7 +289,7 @@ jobs:
           touch deploy-temp/.env
 
           REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
-          echo "FRONTEND_IMAGE=ghcr.io/$REPO_LOWER/frontend:${{ steps.digest.outputs.digest }}" >> deploy-temp/.env
+          echo "FRONTEND_IMAGE=ghcr.io/$REPO_LOWER/frontend@${{ steps.digest.outputs.digest }}" >> deploy-temp/.env
           echo "FRONTEND_PORT=${{ steps.context.outputs.port }}" >> deploy-temp/.env
           echo "CONTAINER_SUFFIX=${{ steps.context.outputs.safe_branch }}" >> deploy-temp/.env
 
