@@ -266,6 +266,11 @@ jobs:
             echo "compose_dir=/opt/ytclipper-staging/$SAFE_BRANCH" >> $GITHUB_OUTPUT
           fi
 
+      - name: Use digest from build-push
+        id: digest
+        run: |
+          echo "digest=${{ needs.build-push.outputs.image-digest }}" >> $GITHUB_OUTPUT
+
       - name: Create deployment artifacts
         run: |
           mkdir -p deploy-temp
@@ -273,7 +278,7 @@ jobs:
           touch deploy-temp/.env
 
           REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
-          echo "BACKEND_IMAGE=ghcr.io/$REPO_LOWER/backend:${{ steps.context.outputs.safe_branch }}" >> deploy-temp/.env
+          echo "BACKEND_IMAGE=ghcr.io/$REPO_LOWER/backend@${{ steps.digest.outputs.digest }}" >> deploy-temp/.env
           echo "BACKEND_PORT=${{ steps.context.outputs.port }}" >> deploy-temp/.env
           echo "CONTAINER_SUFFIX=${{ steps.context.outputs.safe_branch }}" >> deploy-temp/.env
 
