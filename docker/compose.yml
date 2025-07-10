@@ -30,8 +30,8 @@ services:
     restart: unless-stopped
     ports:
       - '${FRONTEND_PORT:-3000}:80'
-    depends_on:
-      - backend
+    env_file:
+      - .env
     networks:
       - ytclipper-network
     healthcheck:
