@@ -126,6 +126,11 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           platforms: linux/amd64
+          build-args: |
+            VITE_ENVIRONMENT=production
+            VITE_AUTH0_CLIENT_ID=${{ secrets.VITE_AUTH0_CLIENT_ID }}
+            VITE_AUTH0_DOMAIN=${{ secrets.VITE_AUTH0_DOMAIN }}
+            VITE_AUTH0_AUDIENCE=${{ secrets.VITE_AUTH0_AUDIENCE }}
 
       - name: Generate build summary
         run: |
@@ -293,11 +298,6 @@ jobs:
           echo "FRONTEND_PORT=${{ steps.context.outputs.port }}" >> deploy-temp/.env
           echo "CONTAINER_SUFFIX=${{ steps.context.outputs.safe_branch }}" >> deploy-temp/.env
 
-          echo "VITE_ENVIRONMENT=staging" >> deploy-temp/.env
-          echo "VITE_AUTH0_CLIENT_ID=${{ secrets.VITE_AUTH0_CLIENT_ID }}" >> deploy-temp/.env
-          echo "VITE_AUTH0_DOMAIN=${{ secrets.VITE_AUTH0_DOMAIN }}" >> deploy-temp/.env
-          echo "VITE_AUTH0_AUDIENCE=${{ secrets.VITE_AUTH0_AUDIENCE }}" >> deploy-temp/.env
-
       - name: Create target dir on VPS
         uses: appleboy/ssh-action@master
         with:
@@ -397,36 +397,32 @@ jobs:
     runs-on: ubuntu-latest
     needs: [deploy-staging]
     steps:
-      - name: Set Deployment Time
-        run: echo "DEPLOYMENT_TIME=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_ENV
-
-      - name: Post Deployment Comment to PR
-        if: |
-          github.event_name == 'pull_request' || github.event_name == 'push'
-        uses: actions/github-script@v7
+      - name: Create deployment URL comment
+        uses: marocchino/sticky-pull-request-comment@v2.1.0
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          script: |
-            const prNumber = context.payload.pull_request?.number;
-            if (!prNumber) {
-              console.log('No pull request number found, skipping comment.');
-              return;
-            }
-            const commentBody = `
-              **🚀 Deployment Status: Ready**
+          header: "deployment-info"
+          message: |
+            **🚀 Deployment Status: Ready**
 
-              🎉 Staging deployment created successfully!
+            🎉 Staging deployment created successfully!
 
-              - **🔗 URL**: https://${{ needs.deploy-staging.outputs.deployment_url }}
-              - **📦 Branch**: ${{ needs.deploy-staging.outputs.deployment_branch }}
-              - **🔢 Port**: ${{ needs.deploy-staging.outputs.deployment_port }}
-              - **🕒 Time**: ${{ env.DEPLOYMENT_TIME }} UTC
+            - **🔗 URL**: https://${{ needs.deploy-staging.outputs.deployment_url }}
+            - **📦 Branch**: ${{ needs.deploy-staging.outputs.deployment_branch }}
+            - **🔢 Port**: ${{ needs.deploy-staging.outputs.deployment_port }}
 
-              _Deployed by GitHub Actions • Inspect or provide feedback below._
-            `;
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: prNumber,
-              body: commentBody
-            });
+            _Deployed by GitHub Actions • Updates automatically on new commits_
+          recreate: true
+          number: ${{ github.event.pull_request.number }}
+
+      - name: Add troubleshooting info
+        if: failure()
+        uses: marocchino/sticky-pull-request-comment@v2.1.0
+        with:
+          header: "deployment-error"
+          message: |
+            **❌ Deployment Failed**
+
+            Deployment to staging failed. Please check workflow logs:
+            ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          recreate: true
+          number: ${{ github.event.pull_request.number }}
