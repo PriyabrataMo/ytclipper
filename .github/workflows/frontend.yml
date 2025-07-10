@@ -128,9 +128,6 @@ jobs:
           platforms: linux/amd64
           build-args: |
             VITE_ENVIRONMENT=production
-            VITE_AUTH0_CLIENT_ID=${{ secrets.VITE_AUTH0_CLIENT_ID }}
-            VITE_AUTH0_DOMAIN=${{ secrets.VITE_AUTH0_DOMAIN }}
-            VITE_AUTH0_AUDIENCE=${{ secrets.VITE_AUTH0_AUDIENCE }}
 
       - name: Generate build summary
         run: |
@@ -168,9 +165,6 @@ jobs:
           echo "CONTAINER_SUFFIX=${{ steps.context.outputs.safe_branch }}" >> deploy-temp/.env
 
           echo "VITE_ENVIRONMENT=production" >> deploy-temp/.env
-          echo "VITE_AUTH0_CLIENT_ID=${{ secrets.VITE_AUTH0_CLIENT_ID }}" >> deploy-temp/.env
-          echo "VITE_AUTH0_DOMAIN=${{ secrets.VITE_AUTH0_DOMAIN }}" >> deploy-temp/.env
-          echo "VITE_AUTH0_AUDIENCE=${{ secrets.VITE_AUTH0_AUDIENCE }}" >> deploy-temp/.env
 
       - name: Upload files to VPS
         uses: appleboy/scp-action@v0.1.4

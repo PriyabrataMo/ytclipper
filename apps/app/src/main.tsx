@@ -5,35 +5,12 @@ import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router';
 
 import './index.css';
+import config from '@/config.ts';
+
 import App from './App.tsx';
 
-const ENV = import.meta.env.VITE_ENVIRONMENT || 'development';
-
-const config = {
-  development: {
-    apiUrl: 'http://localhost:8080',
-    auth0Domain: import.meta.env.VITE_AUTH0_DOMAIN,
-    auth0ClientId: import.meta.env.VITE_AUTH0_CLIENT_ID,
-    auth0Audience: import.meta.env.VITE_AUTH0_AUDIENCE,
-  },
-  staging: {
-    apiUrl: 'https://api.staging.ytclipper.com',
-    auth0Domain: import.meta.env.VITE_AUTH0_DOMAIN,
-    auth0ClientId: import.meta.env.VITE_AUTH0_CLIENT_ID,
-    auth0Audience: import.meta.env.VITE_AUTH0_AUDIENCE,
-  },
-  production: {
-    apiUrl: 'https://api.ytclipper.com',
-    auth0Domain: import.meta.env.VITE_AUTH0_DOMAIN_DEV,
-    auth0ClientId: import.meta.env.VITE_AUTH0_CLIENT_ID_DEV,
-    auth0Audience: import.meta.env.VITE_AUTH0_AUDIENCE_DEV,
-  },
-};
-
-const currentConfig = config[ENV as keyof typeof config];
-
-console.log("Environment:", ENV, "Config:", currentConfig);
-const { auth0Domain, auth0ClientId, auth0Audience } = currentConfig;
+const { auth0Domain, auth0ClientId, auth0Audience } = config;
+console.log('Config:', config);
 
 const onRedirectCallback = (appState: AppState | undefined) => {
   const url = new URL(window.location.href);
