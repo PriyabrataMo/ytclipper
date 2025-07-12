@@ -11,66 +11,266 @@ jobs:
     if: github.event.pull_request.merged == true
 
     steps:
-      - name: Extract Branch Name
+      - name: Extract PR Information
         id: extract
         run: |
-          BRANCH="${{ github.event.pull_request.head.ref }}"
-          SAFE_BRANCH=$(echo "$BRANCH" | tr '/' '-' | tr '[:upper:]' '[:lower:]')
-          echo "safe_branch=$SAFE_BRANCH" >> $GITHUB_OUTPUT
-          echo "Cleaning up resources for branch: $SAFE_BRANCH"
+          PR_NUMBER="${{ github.event.number }}"
+          BRANCH="pr-$PR_NUMBER"
+          echo "pr_number=$PR_NUMBER" >> $GITHUB_OUTPUT
+          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+          echo "Cleaning up resources for PR #$PR_NUMBER (branch: $BRANCH)"
 
-      - name: Cleanup from VPS
+      - name: Cleanup VPS Resources
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
-            SAFE_BRANCH="${{ steps.extract.outputs.safe_branch }}"
+            set -e
 
-            # Skip cleanup for protected branches
-            if [[ "$SAFE_BRANCH" == "main" || "$SAFE_BRANCH" == "staging" ]]; then
-              echo "⏩ Skipping cleanup for protected branch: $SAFE_BRANCH"
-              exit 0
+            PR_NUMBER="${{ steps.extract.outputs.pr_number }}"
+            BRANCH="${{ steps.extract.outputs.branch }}"
+
+            echo "🔍 Starting cleanup for PR #$PR_NUMBER (branch: $BRANCH)"
+
+            # Define resource names based on current deployment structure
+            BACKEND_CONTAINER="ytclipper-$BRANCH-backend"
+            FRONTEND_CONTAINER="ytclipper-$BRANCH-app"
+            DEPLOYMENT_DIR="/opt/ytclipper/deployments/$BRANCH"
+            BACKEND_DOMAIN="api-$BRANCH.ytclipper.com"
+            FRONTEND_DOMAIN="app-$BRANCH.ytclipper.com"
+
+            echo "📦 Target containers: $BACKEND_CONTAINER, $FRONTEND_CONTAINER"
+            echo "📁 Target directory: $DEPLOYMENT_DIR"
+            echo "🌐 Target domains: $BACKEND_DOMAIN, $FRONTEND_DOMAIN"
+
+            # List current containers for debugging
+            echo "📦 Current containers before cleanup:"
+            docker ps -a --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+            # Stop and remove containers
+            echo "🛑 Stopping and removing containers..."
+
+            # Backend container
+            BACKEND_CONTAINERS=$(docker ps -aq -f name="$BACKEND_CONTAINER" || true)
+            if [ -n "$BACKEND_CONTAINERS" ]; then
+              echo "✅ Found backend container: $BACKEND_CONTAINER"
+              docker rm -f "$BACKEND_CONTAINER"
+              echo "🗑️  Removed backend container: $BACKEND_CONTAINER"
+            else
+              echo "ℹ️  No backend container found: $BACKEND_CONTAINER"
             fi
 
-            echo "🔍 Starting cleanup for branch: $SAFE_BRANCH"
+            # Frontend container
+            FRONTEND_CONTAINERS=$(docker ps -aq -f name="$FRONTEND_CONTAINER" || true)
+            if [ -n "$FRONTEND_CONTAINERS" ]; then
+              echo "✅ Found frontend container: $FRONTEND_CONTAINER"
+              docker rm -f "$FRONTEND_CONTAINER"
+              echo "🗑️  Removed frontend container: $FRONTEND_CONTAINER"
+            else
+              echo "ℹ️  No frontend container found: $FRONTEND_CONTAINER"
+            fi
 
-            # Backend resources
-            BACKEND_CONTAINER="backend${SAFE_BRANCH}"
-            BACKEND_COMPOSE_DIR="/opt/ytclipper-staging/$SAFE_BRANCH"
-            BACKEND_DOMAIN="api.$SAFE_BRANCH.ytclipper.com"
-
-            # Frontend resources
-            FRONTEND_CONTAINER="frontend${SAFE_BRANCH}"
-            FRONTEND_COMPOSE_DIR="/opt/ytclipper-frontend-staging/$SAFE_BRANCH"
-            FRONTEND_DOMAIN="$SAFE_BRANCH.ytclipper.com"
-
-            # Remove Docker containers
-            docker rm -f $BACKEND_CONTAINER $FRONTEND_CONTAINER || true
-
-            # Remove deployment directories
-            rm -rf "$BACKEND_COMPOSE_DIR" "$FRONTEND_COMPOSE_DIR"
+            # Try to find any containers with partial name match as fallback
+            PARTIAL_CONTAINERS=$(docker ps -aq --filter "name=ytclipper-$BRANCH" || true)
+            if [ -n "$PARTIAL_CONTAINERS" ]; then
+              echo "🔍 Found additional containers with partial match:"
+              for container in $PARTIAL_CONTAINERS; do
+                CONTAINER_NAME_FULL=$(docker ps -a --format "{{.Names}}" --filter "id=$container")
+                echo "🛑 Stopping and removing: $CONTAINER_NAME_FULL"
+                docker rm -f "$container"
+              done
+            fi
 
             # Remove Nginx configurations
-            sudo rm -f "/etc/nginx/sites-available/$BACKEND_DOMAIN" \
-                       "/etc/nginx/sites-enabled/$BACKEND_DOMAIN" \
-                       "/etc/nginx/sites-available/$FRONTEND_DOMAIN" \
-                       "/etc/nginx/sites-enabled/$FRONTEND_DOMAIN"
+            echo "🗑️  Removing Nginx configurations..."
 
-            # Prune unused Docker images
-            docker image prune -af --filter "label=org.opencontainers.image.title=*$SAFE_BRANCH*"
-
-            # Reload Nginx if configs changed
-            if sudo nginx -t; then
-              sudo systemctl reload nginx
-              echo "♻️ Nginx reloaded successfully"
+            # Backend domain
+            if [ -f "/etc/nginx/sites-enabled/$BACKEND_DOMAIN" ]; then
+              sudo rm -f "/etc/nginx/sites-enabled/$BACKEND_DOMAIN"
+              echo "✅ Removed nginx sites-enabled: $BACKEND_DOMAIN"
             else
-              echo "⚠️ Nginx config test failed - check configs manually"
+              echo "ℹ️  No nginx sites-enabled found: $BACKEND_DOMAIN"
             fi
 
-            echo "✅ Unified cleanup completed for $SAFE_BRANCH"
-            echo "Removed:"
-            echo "- Containers: $BACKEND_CONTAINER, $FRONTEND_CONTAINER"
-            echo "- Directories: $BACKEND_COMPOSE_DIR, $FRONTEND_COMPOSE_DIR"
-            echo "- Domains: $BACKEND_DOMAIN, $FRONTEND_DOMAIN"
+            if [ -f "/etc/nginx/sites-available/$BACKEND_DOMAIN" ]; then
+              sudo rm -f "/etc/nginx/sites-available/$BACKEND_DOMAIN"
+              echo "✅ Removed nginx sites-available: $BACKEND_DOMAIN"
+            else
+              echo "ℹ️  No nginx sites-available found: $BACKEND_DOMAIN"
+            fi
+
+            # Frontend domain
+            if [ -f "/etc/nginx/sites-enabled/$FRONTEND_DOMAIN" ]; then
+              sudo rm -f "/etc/nginx/sites-enabled/$FRONTEND_DOMAIN"
+              echo "✅ Removed nginx sites-enabled: $FRONTEND_DOMAIN"
+            else
+              echo "ℹ️  No nginx sites-enabled found: $FRONTEND_DOMAIN"
+            fi
+
+            if [ -f "/etc/nginx/sites-available/$FRONTEND_DOMAIN" ]; then
+              sudo rm -f "/etc/nginx/sites-available/$FRONTEND_DOMAIN"
+              echo "✅ Removed nginx sites-available: $FRONTEND_DOMAIN"
+            else
+              echo "ℹ️  No nginx sites-available found: $FRONTEND_DOMAIN"
+            fi
+
+            # Test and reload Nginx configuration
+            echo "🔄 Testing and reloading Nginx..."
+            if sudo nginx -t 2>/dev/null; then
+              sudo systemctl reload nginx
+              echo "✅ Nginx configuration reloaded successfully"
+            else
+              echo "⚠️  Nginx configuration test failed, but continuing cleanup"
+            fi
+
+            # Remove deployment directories
+            echo "🗑️  Removing deployment directories..."
+
+            # Remove backend directory
+            if [ -d "$DEPLOYMENT_DIR/backend" ]; then
+              rm -rf "$DEPLOYMENT_DIR/backend"
+              echo "✅ Removed backend directory: $DEPLOYMENT_DIR/backend"
+            else
+              echo "ℹ️  No backend directory found: $DEPLOYMENT_DIR/backend"
+            fi
+
+            # Remove frontend directory
+            if [ -d "$DEPLOYMENT_DIR/frontend" ]; then
+              rm -rf "$DEPLOYMENT_DIR/frontend"
+              echo "✅ Removed frontend directory: $DEPLOYMENT_DIR/frontend"
+            else
+              echo "ℹ️  No frontend directory found: $DEPLOYMENT_DIR/frontend"
+            fi
+
+            # Remove parent directory if empty
+            if [ -d "$DEPLOYMENT_DIR" ]; then
+              if [ -z "$(ls -A "$DEPLOYMENT_DIR" 2>/dev/null)" ]; then
+                rm -rf "$DEPLOYMENT_DIR"
+                echo "✅ Removed empty deployment directory: $DEPLOYMENT_DIR"
+              else
+                echo "ℹ️  Deployment directory not empty, keeping: $DEPLOYMENT_DIR"
+                echo "📁 Contents: $(ls -la "$DEPLOYMENT_DIR")"
+              fi
+            else
+              echo "ℹ️  No deployment directory found: $DEPLOYMENT_DIR"
+            fi
+
+            # Clean up unused Docker images
+            echo "🧹 Cleaning up unused Docker images..."
+            docker image prune -af --filter "label=org.opencontainers.image.ref.name=*$BRANCH*" || true
+
+            echo "✅ VPS cleanup completed for PR #$PR_NUMBER"
+            echo "📊 Summary:"
+            echo "  - Containers: $BACKEND_CONTAINER, $FRONTEND_CONTAINER"
+            echo "  - Directories: $DEPLOYMENT_DIR"
+            echo "  - Domains: $BACKEND_DOMAIN, $FRONTEND_DOMAIN"
+
+      - name: Cleanup GHCR Images for Backend
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.payload.number;
+            const prTag = `pr-${prNumber}`;
+
+            console.log(`🧹 Cleaning up GHCR backend images for PR #${prNumber}`);
+            console.log(`🔍 Looking for images tagged with: ${prTag}`);
+
+            try {
+              // Get all package versions for backend
+              const { data: versions } = await github.rest.packages.getAllPackageVersionsForPackageOwnedByAuthenticatedUser({
+                package_type: 'container',
+                package_name: `${context.repo.owner}/${context.repo.repo}/backend`,
+                per_page: 100
+              });
+              
+              console.log(`📦 Found ${versions.length} total backend package versions`);
+              
+              let deletedCount = 0;
+              
+              for (const version of versions) {
+                const tags = version.metadata?.container?.tags || [];
+                console.log(`🔍 Version ${version.id}: tags = [${tags.join(', ')}]`);
+                
+                // Check if this version has the PR tag
+                if (tags.includes(prTag)) {
+                  console.log(`🗑️  Deleting version ${version.id} (tagged with ${prTag})`);
+                  
+                  try {
+                    await github.rest.packages.deletePackageVersionForAuthenticatedUser({
+                      package_type: 'container',
+                      package_name: `${context.repo.owner}/${context.repo.repo}/backend`,
+                      package_version_id: version.id
+                    });
+                    
+                    console.log(`✅ Successfully deleted version ${version.id}`);
+                    deletedCount++;
+                  } catch (error) {
+                    console.log(`❌ Failed to delete version ${version.id}: ${error.message}`);
+                  }
+                } else {
+                  console.log(`⏩ Keeping version ${version.id} (no PR tag)`);
+                }
+              }
+              
+              console.log(`📊 Backend cleanup summary: deleted ${deletedCount} images for PR #${prNumber}`);
+              
+            } catch (error) {
+              console.log(`⚠️  Error during backend GHCR cleanup: ${error.message}`);
+              // Don't fail the workflow if GHCR cleanup fails
+            }
+
+      - name: Cleanup GHCR Images for Frontend
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.payload.number;
+            const prTag = `pr-${prNumber}`;
+
+            console.log(`🧹 Cleaning up GHCR frontend images for PR #${prNumber}`);
+            console.log(`🔍 Looking for images tagged with: ${prTag}`);
+
+            try {
+              // Get all package versions for frontend
+              const { data: versions } = await github.rest.packages.getAllPackageVersionsForPackageOwnedByAuthenticatedUser({
+                package_type: 'container',
+                package_name: `${context.repo.owner}/${context.repo.repo}/frontend`,
+                per_page: 100
+              });
+              
+              console.log(`📦 Found ${versions.length} total frontend package versions`);
+              
+              let deletedCount = 0;
+              
+              for (const version of versions) {
+                const tags = version.metadata?.container?.tags || [];
+                console.log(`🔍 Version ${version.id}: tags = [${tags.join(', ')}]`);
+                
+                // Check if this version has the PR tag
+                if (tags.includes(prTag)) {
+                  console.log(`🗑️  Deleting version ${version.id} (tagged with ${prTag})`);
+                  
+                  try {
+                    await github.rest.packages.deletePackageVersionForAuthenticatedUser({
+                      package_type: 'container',
+                      package_name: `${context.repo.owner}/${context.repo.repo}/frontend`,
+                      package_version_id: version.id
+                    });
+                    
+                    console.log(`✅ Successfully deleted version ${version.id}`);
+                    deletedCount++;
+                  } catch (error) {
+                    console.log(`❌ Failed to delete version ${version.id}: ${error.message}`);
+                  }
+                } else {
+                  console.log(`⏩ Keeping version ${version.id} (no PR tag)`);
+                }
+              }
+              
+              console.log(`📊 Frontend cleanup summary: deleted ${deletedCount} images for PR #${prNumber}`);
+              
+            } catch (error) {
+              console.log(`⚠️  Error during frontend GHCR cleanup: ${error.message}`);
+              // Don't fail the workflow if GHCR cleanup fails
+            }

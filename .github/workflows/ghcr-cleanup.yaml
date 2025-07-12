@@ -8,49 +8,147 @@ on:
 jobs:
   cleanup-ghcr:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    strategy:
+      matrix:
+        package: [backend, frontend]
 
     env:
-      GHCR_PAT: ${{ secrets.GHCR_PAT }}
       OWNER: ${{ github.repository_owner }}
-      PACKAGE: ytclipper/backend
-      DELETE_OLDER_THAN_DAYS: "3"
+      REPO: ${{ github.repository }}
+      DELETE_OLDER_THAN_DAYS: "7"
+      KEEP_LATEST_COUNT: "5"
 
     steps:
-      - name: Delete older images except 'main' tag
+      - name: Setup package information
+        id: package-info
+        run: |
+          PACKAGE_NAME="${{ matrix.package }}"
+          PACKAGE_PATH="$REPO/$PACKAGE_NAME"
+          echo "package_name=$PACKAGE_NAME" >> $GITHUB_OUTPUT
+          echo "package_path=$PACKAGE_PATH" >> $GITHUB_OUTPUT
+          echo "📦 Processing package: $PACKAGE_NAME"
+
+      - name: Delete old container images
         run: |
           set -e
 
-          echo "📦 Fetching versions for $PACKAGE..."
+          PACKAGE_NAME="${{ steps.package-info.outputs.package_name }}"
+          PACKAGE_PATH="${{ steps.package-info.outputs.package_path }}"
 
+          echo "🧹 Starting cleanup for $PACKAGE_NAME..."
+          echo "📋 Configuration:"
+          echo "  - Package: $PACKAGE_PATH"
+          echo "  - Keep images newer than: $DELETE_OLDER_THAN_DAYS days"
+          echo "  - Keep latest: $KEEP_LATEST_COUNT images"
+
+          # GitHub API endpoints
           API="https://api.github.com"
-          PACKAGE_URL="$API/users/$OWNER/packages/container/${PACKAGE//\//%2F}/versions"
+          PACKAGE_URL="$API/user/packages/container/${PACKAGE_PATH//\//%2F}/versions"
 
+          # Calculate cutoff timestamp
           SECONDS_THRESHOLD=$(awk "BEGIN { print int(${DELETE_OLDER_THAN_DAYS} * 86400) }")
           CUTOFF_UNIX=$(date -d "@$(( $(date +%s) - $SECONDS_THRESHOLD ))" +%s)
+          CUTOFF_DATE=$(date -d "@$CUTOFF_UNIX" '+%Y-%m-%d %H:%M:%S UTC')
 
-          curl -s -H "Authorization: Bearer $GHCR_PAT" -H "Accept: application/vnd.github+json" "$PACKAGE_URL" |
-          jq -c '.[]' |
-          while read -r version; do
-            version_id=$(echo "$version" | jq '.id')
-            tags=$(echo "$version" | jq -r '.metadata.container.tags[]?')
+          echo "🗓️  Cutoff date: $CUTOFF_DATE"
+
+          # Fetch package versions
+          echo "📥 Fetching package versions..."
+
+          VERSIONS=$(curl -s \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H "Accept: application/vnd.github+json" \
+            "$PACKAGE_URL" || echo "[]")
+
+          if [ "$VERSIONS" = "[]" ] || [ -z "$VERSIONS" ]; then
+            echo "ℹ️  No versions found for $PACKAGE_NAME"
+            exit 0
+          fi
+
+          # Count total versions
+          TOTAL_VERSIONS=$(echo "$VERSIONS" | jq length)
+          echo "📊 Found $TOTAL_VERSIONS total versions"
+
+          # Process versions
+          DELETED_COUNT=0
+          KEPT_COUNT=0
+          PROTECTED_COUNT=0
+
+          # Sort versions by created date (newest first) and process
+          echo "$VERSIONS" | jq -c 'sort_by(.created_at) | reverse | .[]' | while read -r version; do
+            version_id=$(echo "$version" | jq -r '.id')
+            tags=$(echo "$version" | jq -r '.metadata.container.tags[]? // empty')
             created_at=$(echo "$version" | jq -r '.created_at')
-            created_at_unix=$(date -d "$created_at" +%s)
-
-            # Skip if tagged as 'main'
-            if echo "$tags" | grep -q "^main$"; then
-              echo "⏩ Skipping version $version_id (tagged as 'main')"
-              continue
+            created_at_unix=$(date -d "$created_at" +%s 2>/dev/null || echo "0")
+            
+            # Check if this version has protected tags
+            PROTECTED=false
+            if echo "$tags" | grep -E "^(main|latest|production|staging)$" >/dev/null 2>&1; then
+              PROTECTED=true
             fi
-
-            if [ "$created_at_unix" -lt "$CUTOFF_UNIX" ]; then
-              echo "🗑️ Deleting version $version_id (created: $created_at)"
-              curl -s -X DELETE \
-                -H "Authorization: Bearer $GHCR_PAT" \
-                -H "Accept: application/vnd.github+json" \
-                "$PACKAGE_URL/$version_id"
+            
+            # Display version info
+            echo "🔍 Version ID: $version_id"
+            echo "   📅 Created: $created_at"
+            echo "   🏷️  Tags: $(echo "$tags" | tr '\n' ' ' | sed 's/[[:space:]]*$//')"
+            
+            if [ "$PROTECTED" = true ]; then
+              echo "   🛡️  Status: PROTECTED (has protected tags)"
+              PROTECTED_COUNT=$((PROTECTED_COUNT + 1))
+            elif [ "$KEPT_COUNT" -lt "$KEEP_LATEST_COUNT" ]; then
+              echo "   ✅ Status: KEPT (within latest $KEEP_LATEST_COUNT)"
+              KEPT_COUNT=$((KEPT_COUNT + 1))
+            elif [ "$created_at_unix" -gt "$CUTOFF_UNIX" ]; then
+              echo "   ✅ Status: KEPT (newer than $DELETE_OLDER_THAN_DAYS days)"
+              KEPT_COUNT=$((KEPT_COUNT + 1))
             else
-              echo "⏩ Keeping version $version_id (created: $created_at)"
+              echo "   🗑️  Status: DELETING (older than $DELETE_OLDER_THAN_DAYS days)"
+              
+              # Delete the version
+              DELETE_URL="$API/user/packages/container/${PACKAGE_PATH//\//%2F}/versions/$version_id"
+              if curl -s -X DELETE \
+                -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+                -H "Accept: application/vnd.github+json" \
+                "$DELETE_URL" > /dev/null; then
+                echo "   ✅ Successfully deleted version $version_id"
+                DELETED_COUNT=$((DELETED_COUNT + 1))
+              else
+                echo "   ❌ Failed to delete version $version_id"
+              fi
             fi
+            echo ""
           done
 
-          echo "✅ GHCR cleanup complete."
+          echo "📊 Cleanup Summary for $PACKAGE_NAME:"
+          echo "   🗑️  Deleted: $DELETED_COUNT versions"
+          echo "   ✅ Kept: $KEPT_COUNT versions"
+          echo "   🛡️  Protected: $PROTECTED_COUNT versions"
+          echo "   📦 Total processed: $TOTAL_VERSIONS versions"
+          echo ""
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "✅ GHCR cleanup completed for ${{ steps.package-info.outputs.package_name }}"
+
+  cleanup-summary:
+    needs: cleanup-ghcr
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Cleanup Summary
+        run: |
+          echo "🎉 GHCR cleanup workflow completed!"
+          echo ""
+          echo "📋 Cleanup Policy:"
+          echo "  - Protected tags: main, latest, production, staging"
+          echo "  - Keep latest: 5 images per package"
+          echo "  - Delete images older than: 7 days"
+          echo ""
+          echo "🔄 This workflow runs daily at 2 AM UTC"
+          echo "🔧 You can also run it manually from the Actions tab"
