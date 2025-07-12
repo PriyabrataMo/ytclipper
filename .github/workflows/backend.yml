@@ -471,6 +471,60 @@ jobs:
 
             echo "✅ Backend cleanup completed for $BRANCH"
 
+      - name: Cleanup GHCR images for PR
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const prNumber = context.payload.number;
+            const prTag = `pr-${prNumber}`;
+
+            console.log(`🧹 Cleaning up GHCR images for PR #${prNumber}`);
+            console.log(`🔍 Looking for images tagged with: ${prTag}`);
+
+            try {
+              // Get all package versions for backend
+              const { data: versions } = await github.rest.packages.getAllPackageVersionsForPackageOwnedByAuthenticatedUser({
+                package_type: 'container',
+                package_name: `${context.repo.owner}/${context.repo.repo}/backend`,
+                per_page: 100
+              });
+              
+              console.log(`📦 Found ${versions.length} total backend package versions`);
+              
+              let deletedCount = 0;
+              
+              for (const version of versions) {
+                const tags = version.metadata?.container?.tags || [];
+                console.log(`🔍 Version ${version.id}: tags = [${tags.join(', ')}]`);
+                
+                // Check if this version has the PR tag
+                if (tags.includes(prTag)) {
+                  console.log(`🗑️  Deleting version ${version.id} (tagged with ${prTag})`);
+                  
+                  try {
+                    await github.rest.packages.deletePackageVersionForAuthenticatedUser({
+                      package_type: 'container',
+                      package_name: `${context.repo.owner}/${context.repo.repo}/backend`,
+                      package_version_id: version.id
+                    });
+                    
+                    console.log(`✅ Successfully deleted version ${version.id}`);
+                    deletedCount++;
+                  } catch (error) {
+                    console.log(`❌ Failed to delete version ${version.id}: ${error.message}`);
+                  }
+                } else {
+                  console.log(`⏩ Keeping version ${version.id} (no PR tag)`);
+                }
+              }
+              
+              console.log(`📊 GHCR cleanup summary: deleted ${deletedCount} backend images for PR #${prNumber}`);
+              
+            } catch (error) {
+              console.log(`⚠️  Error during GHCR cleanup: ${error.message}`);
+              // Don't fail the workflow if GHCR cleanup fails
+            }
+
       - name: Comment on cleanup
         uses: marocchino/sticky-pull-request-comment@v2.1.0
         with:
