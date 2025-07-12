@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@ytclipper/ui';
 import { Clock, Play, User } from 'lucide-react';
 import { Link } from 'react-router';
 
-import { Video } from '../../types';
+import type { Video } from '../../types';
 
 interface VideoCardProps {
   video: Video;
@@ -11,7 +11,7 @@ interface VideoCardProps {
 export const VideoCard = ({ video }: VideoCardProps) => {
   return (
     <Link to={`/video/${video.id}`} className='block group'>
-      <Card className='overflow-hidden hover:shadow-lg transition-shadow duration-200 group-hover:scale-[1.02] transition-transform'>
+      <Card className='overflow-hidden hover:shadow-lg transition-shadow duration-200 group-hover:scale-[1.02]'>
         <div className='relative'>
           <img
             src={video.thumbnailUrl}

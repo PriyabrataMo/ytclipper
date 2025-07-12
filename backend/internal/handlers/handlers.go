@@ -6,9 +6,11 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/shubhamku044/ytclipper/internal/auth"
 	"github.com/shubhamku044/ytclipper/internal/database"
 	"github.com/shubhamku044/ytclipper/internal/middleware"
+	"github.com/shubhamku044/ytclipper/internal/models"
 )
 
 // UserInfo represents user information for API responses
@@ -229,6 +231,192 @@ func DeleteTimestamp(c *gin.Context) {
 		"timestamp_id": timestampID,
 		"user_id":      userID,
 	})
+}
+
+// CreateUser creates a new user
+func CreateUser(db *database.Database) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID, exists := auth.GetUserID(c)
+		if !exists {
+			middleware.RespondWithError(c, http.StatusUnauthorized, "NO_USER_ID", "User ID not found", nil)
+			return
+		}
+
+		// Extract user info from Auth0 claims
+		claims, exists := auth.GetClaims(c)
+		if !exists {
+			middleware.RespondWithError(c, http.StatusUnauthorized, "NO_CLAIMS", "Token claims not found", nil)
+			return
+		}
+
+		// Check if user already exists
+		var existingUser models.User
+		err := db.DB.Where("auth0_sub = ?", userID).First(&existingUser).Error
+		if err == nil {
+			// User already exists, return existing user
+			middleware.RespondWithOK(c, gin.H{
+				"user":    existingUser,
+				"message": "User already exists",
+			})
+			return
+		}
+
+		// Create new user
+		newUser := models.User{
+			ID:       uuid.New(),
+			Email:    claims.RegisteredClaims.Subject, // This might need adjustment based on your Auth0 setup
+			Auth0ID:  userID,
+			Auth0Sub: userID,
+			Plan:     models.PlanFree,
+			IsActive: true,
+			Preferences: models.UserPreferences{
+				Theme:                "light",
+				Language:             "en",
+				TimeFormat:           "12h",
+				DefaultVideoQuality:  "720p",
+				AutoSaveClips:        true,
+				ShowTimestamps:       true,
+				NotificationsEnabled: true,
+			},
+			TotalVideos:    0,
+			TotalClips:     0,
+			TotalPlaylists: 0,
+			CreatedAt:      time.Now(),
+			UpdatedAt:      time.Now(),
+		}
+
+		if err := db.DB.Create(&newUser).Error; err != nil {
+			middleware.RespondWithError(c, http.StatusInternalServerError, "CREATE_USER_ERROR", "Failed to create user", gin.H{
+				"error": err.Error(),
+			})
+			return
+		}
+
+		middleware.RespondWithOK(c, gin.H{
+			"user":    newUser,
+			"message": "User created successfully",
+		})
+	}
+}
+
+// GetCurrentUser gets the current authenticated user
+func GetCurrentUser(db *database.Database) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID, exists := auth.GetUserID(c)
+		if !exists {
+			middleware.RespondWithError(c, http.StatusUnauthorized, "NO_USER_ID", "User ID not found", nil)
+			return
+		}
+
+		var user models.User
+		err := db.DB.Where("auth0_sub = ?", userID).First(&user).Error
+		if err != nil {
+			middleware.RespondWithError(c, http.StatusNotFound, "USER_NOT_FOUND", "User not found", gin.H{
+				"error": err.Error(),
+			})
+			return
+		}
+
+		middleware.RespondWithOK(c, gin.H{
+			"data": user,
+		})
+	}
+}
+
+// UpdateUser updates the current user's information
+func UpdateUser(db *database.Database) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID, exists := auth.GetUserID(c)
+		if !exists {
+			middleware.RespondWithError(c, http.StatusUnauthorized, "NO_USER_ID", "User ID not found", nil)
+			return
+		}
+
+		var updateRequest struct {
+			Name        *string                 `json:"name"`
+			Username    *string                 `json:"username"`
+			AvatarURL   *string                 `json:"avatar_url"`
+			Preferences *models.UserPreferences `json:"preferences"`
+		}
+
+		if err := c.ShouldBindJSON(&updateRequest); err != nil {
+			middleware.RespondWithError(c, http.StatusBadRequest, "INVALID_REQUEST", "Invalid request body", gin.H{
+				"error": err.Error(),
+			})
+			return
+		}
+
+		// Find the user
+		var user models.User
+		err := db.DB.Where("auth0_sub = ?", userID).First(&user).Error
+		if err != nil {
+			middleware.RespondWithError(c, http.StatusNotFound, "USER_NOT_FOUND", "User not found", gin.H{
+				"error": err.Error(),
+			})
+			return
+		}
+
+		// Update fields if provided
+		if updateRequest.Name != nil {
+			user.Name = *updateRequest.Name
+		}
+		if updateRequest.Username != nil {
+			user.Username = *updateRequest.Username
+		}
+		if updateRequest.AvatarURL != nil {
+			user.AvatarURL = *updateRequest.AvatarURL
+		}
+		if updateRequest.Preferences != nil {
+			user.Preferences = *updateRequest.Preferences
+		}
+
+		user.UpdatedAt = time.Now()
+
+		if err := db.DB.Save(&user).Error; err != nil {
+			middleware.RespondWithError(c, http.StatusInternalServerError, "UPDATE_USER_ERROR", "Failed to update user", gin.H{
+				"error": err.Error(),
+			})
+			return
+		}
+
+		middleware.RespondWithOK(c, gin.H{
+			"data":    user,
+			"message": "User updated successfully",
+		})
+	}
+}
+
+// DeleteUser deletes the current user
+func DeleteUser(db *database.Database) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID, exists := auth.GetUserID(c)
+		if !exists {
+			middleware.RespondWithError(c, http.StatusUnauthorized, "NO_USER_ID", "User ID not found", nil)
+			return
+		}
+
+		// Find the user
+		var user models.User
+		err := db.DB.Where("auth0_sub = ?", userID).First(&user).Error
+		if err != nil {
+			middleware.RespondWithError(c, http.StatusNotFound, "USER_NOT_FOUND", "User not found", gin.H{
+				"error": err.Error(),
+			})
+			return
+		}
+
+		// Soft delete the user
+		if err := db.DB.Delete(&user).Error; err != nil {
+			middleware.RespondWithError(c, http.StatusInternalServerError, "DELETE_USER_ERROR", "Failed to delete user", gin.H{
+				"error": err.Error(),
+			})
+			return
+		}
+
+		middleware.RespondWithOK(c, gin.H{
+			"message": "User deleted successfully",
+		})
+	}
 }
 
 // generateID generates a simple timestamp-based ID

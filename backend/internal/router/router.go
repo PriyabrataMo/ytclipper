@@ -29,7 +29,7 @@ func SetupRouter(db *database.Database, cfg *config.Config) *gin.Engine {
 	r.Use(middleware.RequestLogger())
 
 	// Initialize Auth0 service
-	auth0Service, err := auth.NewAuth0Service(&cfg.Auth0)
+	auth0Service, err := auth.NewAuth0Service(&cfg.Auth0, db)
 	if err != nil {
 		panic("Failed to initialize Auth0 service: " + err.Error())
 	}
@@ -104,6 +104,15 @@ func SetupRouter(db *database.Database, cfg *config.Config) *gin.Engine {
 		{
 			// User profile endpoint
 			protected.GET("/profile", handlers.GetUserProfile)
+
+			// User management endpoints
+			userRoutes := protected.Group("/users")
+			{
+				userRoutes.POST("", handlers.CreateUser(db))
+				userRoutes.GET("/me", handlers.GetCurrentUser(db))
+				userRoutes.PUT("/me", handlers.UpdateUser(db))
+				userRoutes.DELETE("/me", handlers.DeleteUser(db))
+			}
 
 			// Timestamp endpoints
 			timestampRoutes := protected.Group("/timestamps")

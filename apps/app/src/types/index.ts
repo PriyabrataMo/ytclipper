@@ -21,3 +21,6 @@ export interface Video {
 export interface ClipperData {
   videos: Video[];
 }
+
+// Re-export user types
+export * from './user';

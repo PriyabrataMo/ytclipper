@@ -7,12 +7,16 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"github.com/shubhamku044/ytclipper/internal/config"
+	"github.com/shubhamku044/ytclipper/internal/database"
 	"github.com/shubhamku044/ytclipper/internal/middleware"
+	"github.com/shubhamku044/ytclipper/internal/models"
 	"golang.org/x/oauth2"
 )
 
@@ -21,6 +25,7 @@ type Auth0Service struct {
 	provider *oidc.Provider
 	oauth    *oauth2.Config
 	verifier *oidc.IDTokenVerifier
+	db       *database.Database
 }
 
 type UserInfo struct {
@@ -32,7 +37,7 @@ type UserInfo struct {
 	Nickname      string `json:"nickname"`
 }
 
-func NewAuth0Service(cfg *config.Auth0Config) (*Auth0Service, error) {
+func NewAuth0Service(cfg *config.Auth0Config, db *database.Database) (*Auth0Service, error) {
 	ctx := context.Background()
 
 	fmt.Printf("Connecting to Auth0 domain: %s\n", cfg.Domain)
@@ -58,6 +63,7 @@ func NewAuth0Service(cfg *config.Auth0Config) (*Auth0Service, error) {
 		provider: provider,
 		oauth:    oauth,
 		verifier: verifier,
+		db:       db,
 	}, nil
 }
 
@@ -139,6 +145,24 @@ func (a *Auth0Service) CallbackHandler() gin.HandlerFunc {
 			return
 		}
 
+		// Create or update user in database
+		if a.db != nil {
+			// Import the handlers package to use CreateOrUpdateUser
+			// We need to move this function to avoid circular import
+			dbUser, err := a.createOrUpdateUser(userInfo)
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to create/update user in database")
+				middleware.RespondWithError(c, http.StatusInternalServerError, "DATABASE_ERROR", "Failed to save user", nil)
+				return
+			}
+
+			log.Info().
+				Str("user_id", userInfo.Sub).
+				Str("db_user_id", dbUser.ID.String()).
+				Bool("is_new_user", dbUser.CreatedAt.Equal(dbUser.UpdatedAt)).
+				Msg("User processed successfully")
+		}
+
 		// Store tokens in secure cookies or return them
 		c.SetCookie("access_token", token.AccessToken, int(token.Expiry.Unix()), "/", "", true, true)
 		c.SetCookie("id_token", rawIDToken, int(token.Expiry.Unix()), "/", "", true, true)
@@ -199,4 +223,70 @@ func (a *Auth0Service) GetUserInfo() gin.HandlerFunc {
 
 		middleware.RespondWithOK(c, userInfo)
 	}
+}
+
+// createOrUpdateUser creates a new user or updates existing user in database
+func (a *Auth0Service) createOrUpdateUser(userInfo UserInfo) (*models.User, error) {
+	// Check if user already exists
+	var existingUser models.User
+	err := a.db.DB.Where("auth0_sub = ?", userInfo.Sub).First(&existingUser).Error
+
+	if err == nil {
+		// User exists, update basic info
+		existingUser.Name = userInfo.Name
+		existingUser.Email = userInfo.Email
+		existingUser.AvatarURL = userInfo.Picture
+		existingUser.UpdatedAt = time.Now()
+
+		if err := a.db.DB.Save(&existingUser).Error; err != nil {
+			log.Error().Err(err).Str("user_id", userInfo.Sub).Msg("Failed to update existing user")
+			return nil, err
+		}
+
+		log.Info().
+			Str("user_id", userInfo.Sub).
+			Str("db_user_id", existingUser.ID.String()).
+			Msg("Updated existing user")
+
+		return &existingUser, nil
+	}
+
+	// Create new user
+	newUser := models.User{
+		ID:        uuid.New(),
+		Email:     userInfo.Email,
+		Name:      userInfo.Name,
+		Auth0ID:   userInfo.Sub,
+		Auth0Sub:  userInfo.Sub,
+		AvatarURL: userInfo.Picture,
+		Plan:      models.PlanFree,
+		IsActive:  true,
+		Preferences: models.UserPreferences{
+			Theme:                "light",
+			Language:             "en",
+			TimeFormat:           "12h",
+			DefaultVideoQuality:  "720p",
+			AutoSaveClips:        true,
+			ShowTimestamps:       true,
+			NotificationsEnabled: true,
+		},
+		TotalVideos:    0,
+		TotalClips:     0,
+		TotalPlaylists: 0,
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
+	}
+
+	if err := a.db.DB.Create(&newUser).Error; err != nil {
+		log.Error().Err(err).Str("user_id", userInfo.Sub).Msg("Failed to create new user")
+		return nil, err
+	}
+
+	log.Info().
+		Str("user_id", userInfo.Sub).
+		Str("db_user_id", newUser.ID.String()).
+		Str("email", newUser.Email).
+		Msg("Created new user successfully")
+
+	return &newUser, nil
 }

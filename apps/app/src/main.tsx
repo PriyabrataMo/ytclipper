@@ -4,7 +4,9 @@ import { Auth0Provider, type AppState } from '@auth0/auth0-react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router';
 
+import QueryProvider from '@/components/query-provider';
 import config from '@/config.ts';
+
 import './index.css';
 
 import App from './app.tsx';
@@ -44,9 +46,11 @@ createRoot(rootElement).render(
       cacheLocation='localstorage'
       onRedirectCallback={onRedirectCallback}
     >
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
+      <QueryProvider>
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
+      </QueryProvider>
     </Auth0Provider>
   </StrictMode>,
 );
