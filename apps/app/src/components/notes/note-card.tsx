@@ -1,7 +1,7 @@
 import { Card, CardContent } from '@ytclipper/ui';
 import { Clock, MessageSquare } from 'lucide-react';
 
-import { Note } from '../../types';
+import { type Note } from '@/types';
 
 interface NoteCardProps {
   note: Note;

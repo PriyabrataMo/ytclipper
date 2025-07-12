@@ -1,4 +1,4 @@
-import { ClipperData } from '../types';
+import { type ClipperData } from '@/types';
 
 export const mockData: ClipperData = {
   videos: [

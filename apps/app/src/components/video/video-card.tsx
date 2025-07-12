@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@ytclipper/ui';
 import { Clock, Play, User } from 'lucide-react';
 import { Link } from 'react-router';
 
-import { Video } from '../../types';
+import { type Video } from '@/types';
 
 interface VideoCardProps {
   video: Video;
