@@ -1,259 +1,115 @@
 import { logger } from '@ytclipper/extension-dev-utils';
 
-import { authService } from '../services/authService';
+import { AuthMessage, AuthStorage } from '../types/auth';
 
-// Background service worker for YTClipper Chrome Extension
 logger.info('Background service worker started');
 
-// Handle extension installation
-chrome.runtime.onInstalled.addListener((details) => {
-  logger.info('Extension installed:', details.reason);
+const MY_DOMAIN = 'http://localhost:5173';
 
-  if (details.reason === 'install') {
-    // Set default settings
-    chrome.storage.sync.set({
-      apiEndpoint: 'http://localhost:8080/api/v1',
-      autoSave: true,
-      showNotifications: true,
+function isTokenValid(tokenExpiry?: number): boolean {
+  return !!tokenExpiry && Date.now() < tokenExpiry;
+}
+
+async function updatePopupState(): Promise<void> {
+  const result = (await chrome.storage.sync.get([
+    'auth0_token',
+    'user_info',
+    'token_expiry',
+  ])) as AuthStorage;
+
+  if (result.auth0_token && isTokenValid(result.token_expiry)) {
+    await chrome.action.setPopup({ popup: 'src/popup/index.html' });
+    logger.info('Popup enabled - user authenticated');
+  } else {
+    await chrome.action.setPopup({ popup: '' });
+    logger.info('Popup disabled - user not authenticated');
+  }
+}
+updatePopupState().catch((error) => {
+  logger.error('Error updating popup state:', error);
+});
+
+chrome.action.onClicked.addListener(async () => {
+  const result = (await chrome.storage.sync.get([
+    'auth0_token',
+    'token_expiry',
+  ])) as Pick<AuthStorage, 'auth0_token' | 'token_expiry'>;
+
+  if (!result.auth0_token || !isTokenValid(result.token_expiry)) {
+    logger.info('User not authenticated, redirecting to login page');
+    chrome.tabs.create({
+      url: MY_DOMAIN,
     });
   }
 });
 
-// Handle messages from content scripts and popup
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  logger.info('Message received in background:', message);
+chrome.runtime.onMessage.addListener(
+  (
+    message: AuthMessage,
+    sender: chrome.runtime.MessageSender,
+    sendResponse: (response?: unknown) => void,
+  ) => {
+    if (message.type === 'AUTH0_TOKEN_UPDATE') {
+      const dataToStore = {
+        auth0_token: message.token,
+        token_expiry: message.expiry,
+        user_info: message.user,
+      };
 
-  switch (message.type) {
-    case 'SAVE_TIMESTAMP':
-      handleSaveTimestamp(message.data)
-        .then(sendResponse)
+      chrome.storage.sync
+        .set(dataToStore)
+        .then(() => {
+          updatePopupState();
+          sendResponse({ success: true });
+        })
         .catch((error) => {
-          logger.error('Failed to save timestamp:', error);
-          sendResponse({ success: false, error: error.message });
-
-          return undefined;
+          sendResponse({ success: false, error });
         });
 
-      return true; // Keep the message channel open for async response
+      return true; // Keep channel open
+    }
 
-    case 'GET_TIMESTAMPS':
-      handleGetTimestamps(message.data)
-        .then(sendResponse)
+    if (message.type === 'AUTH0_LOGOUT') {
+      chrome.storage.sync
+        .remove(['auth0_token', 'token_expiry', 'user_info'])
+        .then(() => {
+          logger.info('User logged out, updating popup state');
+          updatePopupState();
+        })
+        .then(() => {
+          sendResponse({ success: true });
+        })
         .catch((error) => {
-          logger.error('Failed to get timestamps:', error);
-          sendResponse({ success: false, error: error.message });
-
-          return undefined;
+          logger.error('Error during logout:', error);
+          sendResponse({ success: false, error });
         });
-
       return true;
+    }
+    logger.warn('Unknown message type:', message);
+    sendResponse({ success: false, error: 'Unknown message type' });
 
-    case 'SYNC_DATA':
-      handleSyncData()
-        .then(sendResponse)
-        .catch((error) => {
-          logger.error('Failed to sync data:', error);
-          sendResponse({ success: false, error: error.message });
+    return true;
+  },
+);
 
-          return undefined;
-        });
+async function initatializeClipperState() {
+  const result = await chrome.storage.sync.get('clipper_enabled');
 
-      return true;
-
-    default:
-      logger.warn('Unknown message type:', message.type);
-      sendResponse({ success: false, error: 'Unknown message type' });
-
-      return true;
+  if (result.clipper_enabled === undefined) {
+    await chrome.storage.sync.set({ clipper_enabled: true });
+    logger.info('Clipper state initialized to enabled');
   }
+}
+
+initatializeClipperState().catch((error) => {
+  logger.error('Error initializing clipper state:', error);
 });
 
-// Save timestamp to backend and local storage as fallback
-async function handleSaveTimestamp(data: {
-  videoId: string;
-  timestamp: number;
-  title: string;
-  note?: string;
-  tags?: string[];
-}) {
-  try {
-    // Get current authentication
-    const auth = await authService.getCurrentAuth();
-
-    if (!auth.isAuthenticated || !auth.token) {
-      // Save locally if not authenticated
-      return await saveTimestampLocally(data);
-    }
-
-    // Try to save to backend first
-    try {
-      const settings = await chrome.storage.sync.get(['apiEndpoint']);
-      const apiEndpoint =
-        settings.apiEndpoint || 'http://localhost:8080/api/v1';
-
-      const response = await fetch(`${apiEndpoint}/timestamps`, {
-        method: 'POST',
-        headers: authService.getAuthHeader(auth.token),
-        body: JSON.stringify({
-          video_id: data.videoId,
-          timestamp: data.timestamp,
-          title: data.title,
-          note: data.note || '',
-          tags: data.tags || [],
-        }),
-      });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          // Token expired, clear auth data and fall back to local storage
-          await authService.clearAuthData();
-          throw new Error('Authentication expired');
-        }
-        throw new Error(`Backend save failed: ${response.statusText}`);
-      }
-
-      const result = await response.json();
-
-      if (result.success && result.data?.timestamp) {
-        // Also save locally as backup
-        await saveTimestampLocally(data);
-
-        return {
-          success: true,
-          timestamp: result.data.timestamp,
-          source: 'backend',
-        };
-      }
-      throw new Error('Invalid response from backend');
-    } catch (backendError) {
-      logger.warn('Backend save failed, saving locally:', backendError);
-
-      // Fall back to local storage
-      return await saveTimestampLocally(data);
-    }
-  } catch (error) {
-    throw new Error(`Failed to save timestamp: ${error}`);
-  }
-}
-
-// Save timestamp to local storage (fallback)
-async function saveTimestampLocally(data: {
-  videoId: string;
-  timestamp: number;
-  title: string;
-  note?: string;
-  tags?: string[];
-}) {
-  // Get current timestamps from storage
-  const result = await chrome.storage.local.get(['timestamps']);
-  const timestamps = result.timestamps ?? {};
-
-  // Add new timestamp
-  timestamps[data.videoId] ??= [];
-
-  const newTimestamp = {
-    id: Date.now().toString(),
-    timestamp: data.timestamp,
-    title: data.title,
-    note: data.note ?? '',
-    tags: data.tags ?? [],
-    createdAt: new Date().toISOString(),
-  };
-
-  timestamps[data.videoId].push(newTimestamp);
-
-  // Save to local storage
-  await chrome.storage.local.set({ timestamps });
-
-  return {
-    success: true,
-    timestamp: newTimestamp,
-    source: 'local',
-  };
-}
-
-// Get timestamps for a video (try backend first, then local)
-async function handleGetTimestamps(data: { videoId: string }) {
-  try {
-    // Get current authentication
-    const auth = await authService.getCurrentAuth();
-
-    if (auth.isAuthenticated && auth.token) {
-      // Try to get from backend first
-      try {
-        const settings = await chrome.storage.sync.get(['apiEndpoint']);
-        const apiEndpoint =
-          settings.apiEndpoint || 'http://localhost:8080/api/v1';
-
-        const response = await fetch(
-          `${apiEndpoint}/timestamps/${data.videoId}`,
-          {
-            method: 'GET',
-            headers: authService.getAuthHeader(auth.token),
-          },
-        );
-
-        if (response.ok) {
-          const result = await response.json();
-
-          if (result.success && result.data?.timestamps) {
-            return {
-              success: true,
-              timestamps: result.data.timestamps,
-              source: 'backend',
-            };
-          }
-        } else if (response.status === 401) {
-          // Token expired, clear auth data
-          await authService.clearAuthData();
-        }
-      } catch (backendError) {
-        logger.warn('Backend fetch failed, using local data:', backendError);
-      }
-    }
-
-    // Fall back to local storage
-    const result = await chrome.storage.local.get(['timestamps']);
-    const timestamps = result.timestamps ?? {};
-
-    return {
-      success: true,
-      timestamps: timestamps[data.videoId] ?? [],
-      source: 'local',
-    };
-  } catch (error) {
-    throw new Error(`Failed to get timestamps: ${error}`);
-  }
-}
-
-// Sync local data with backend
-async function handleSyncData() {
-  try {
-    const auth = await authService.getCurrentAuth();
-
-    if (!auth.isAuthenticated || !auth.token) {
-      return {
-        success: false,
-        message: 'Not authenticated - cannot sync with backend',
-      };
-    }
-
-    const settings = await chrome.storage.sync.get(['apiEndpoint']);
-    const localData = await chrome.storage.local.get(['timestamps']);
-
-    if (!settings.apiEndpoint || !localData.timestamps) {
-      return { success: true, message: 'Nothing to sync' };
-    }
-
-    // In a real implementation, you'd sync local timestamps with backend
-    logger.info('Syncing data with backend...', settings.apiEndpoint);
-
-    return {
-      success: true,
-      message: 'Data sync completed',
-      user: auth.user?.email || 'Unknown',
-    };
-  } catch (error) {
-    throw new Error(`Failed to sync data: ${error}`);
-  }
-}
+setInterval(
+  () => {
+    updatePopupState().catch((error) => {
+      logger.error('Error updating popup state in interval:', error);
+    });
+  },
+  5 * 60 * 1000,
+);

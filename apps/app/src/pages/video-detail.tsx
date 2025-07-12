@@ -1,12 +1,12 @@
-import { useParams, Navigate } from 'react-router';
 import { useAuth0 } from '@auth0/auth0-react';
 import { Button } from '@ytclipper/ui';
 import { Calendar, Clock, Share2, User } from 'lucide-react';
+import { Navigate, useParams } from 'react-router';
 
-import { YouTubePlayer } from '../components/video';
-import { NotesList } from '../components/notes';
-import { PageLayout, Navigation } from '../components/layout';
-import { useVideo } from '../hooks/use-videos';
+import { Navigation, PageLayout } from '@/components/layout';
+import { NotesList } from '@/components/notes';
+import { YouTubePlayer } from '@/components/video';
+import { useVideo } from '@/hooks/use-videos';
 
 export const VideoDetailPage = () => {
   const { id } = useParams<{ id: string }>();
@@ -23,7 +23,7 @@ export const VideoDetailPage = () => {
         <Navigation showBackButton />
         <PageLayout>
           <div className='text-center py-16'>
-            <div className='animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4'></div>
+            <div className='animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4' />
             <p className='text-gray-600'>Loading video...</p>
           </div>
         </PageLayout>

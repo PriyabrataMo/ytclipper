@@ -6,8 +6,8 @@ import {
   CardHeader,
   CardTitle,
 } from '@ytclipper/ui';
+import { Bookmark, Clock, Play, Share2 } from 'lucide-react';
 import { Link } from 'react-router';
-import { Play, Clock, Bookmark, Share2 } from 'lucide-react';
 
 import LoginButton from '../components/login-button';
 

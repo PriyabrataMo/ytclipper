@@ -2,23 +2,17 @@ name: Backend CI/CD Pipeline
 
 on:
   push:
-    branches:
-      - main
-      - staging
-      - "**"
+    branches: [main, staging]
     paths:
       - "backend/**"
       - ".github/workflows/backend.yml"
-      # - "docker/**"
 
-  pull_request_target:
-    branches:
-      - main
-      - staging
+  pull_request:
+    branches: [main, staging]
     paths:
       - "backend/**"
       - ".github/workflows/backend.yml"
-      # - "docker/**"
+
   workflow_dispatch:
 
 env:
@@ -26,46 +20,13 @@ env:
   IMAGE_NAME: ${{ github.repository }}/backend
 
 jobs:
-  preflight:
-    name: 🚦 Preflight
+  test-and-build:
+    name: 🧪 Test & Build
     runs-on: ubuntu-latest
-    steps:
-      - run: |
-          echo "EVENT    = ${{ github.event_name }}"
-          echo "REF      = ${{ github.ref }}"
-          echo "PR HEAD  = ${{ github.event.pull_request.head.ref }}"
-          echo "-------------------------"
-
-  pr-check:
-    name: 🧪 PR Check (Lint & Test)
-    needs: preflight
-    runs-on: ubuntu-latest
-    if: |
-      (github.event_name == 'pull_request_target') ||
-      (github.event_name == 'push') && (
-        github.ref != 'refs/heads/main' ||
-        github.ref != 'refs/heads/staging'
-      )
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Run tests
-        run: |
-          echo "Pretend we're running tests here..."
-  build-push:
-    name: 🏗️ Build & Push Docker
-    runs-on: ubuntu-latest
-    needs: [pr-check]
-
-    if: |
-      (github.event_name == 'pull_request_target') ||
-      (github.event_name == 'push')
-
     outputs:
-      image-tag: ${{ steps.meta.outputs.tags }}
       image-digest: ${{ steps.build.outputs.digest }}
-
+      should-deploy: ${{ steps.check-deploy.outputs.should-deploy }}
+      deploy-type: ${{ steps.check-deploy.outputs.deploy-type }}
     permissions:
       contents: read
       packages: write
@@ -74,10 +35,43 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.21"
+
+      - name: Run checks in parallel
+        run: |
+          cd backend
+          # Run tests, formatting, and linting in parallel
+          go test ./... &
+          go fmt ./... &
+          go vet ./... &
+          wait
+
+      - name: Check deployment requirements
+        id: check-deploy
+        run: |
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            echo "should-deploy=true" >> $GITHUB_OUTPUT
+            echo "deploy-type=pr" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            echo "should-deploy=true" >> $GITHUB_OUTPUT
+            echo "deploy-type=production" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == "refs/heads/staging" ]]; then
+            echo "should-deploy=true" >> $GITHUB_OUTPUT
+            echo "deploy-type=staging" >> $GITHUB_OUTPUT
+          else
+            echo "should-deploy=false" >> $GITHUB_OUTPUT
+            echo "deploy-type=none" >> $GITHUB_OUTPUT
+          fi
+
       - name: Set up Docker Buildx
+        if: steps.check-deploy.outputs.should-deploy == 'true'
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to Container Registry
+        if: steps.check-deploy.outputs.should-deploy == 'true'
         uses: docker/login-action@v3
         with:
           registry: ${{ env.REGISTRY }}
@@ -85,6 +79,7 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Extract metadata
+        if: steps.check-deploy.outputs.should-deploy == 'true'
         id: meta
         uses: docker/metadata-action@v5
         with:
@@ -93,13 +88,11 @@ jobs:
             type=ref,event=branch
             type=ref,event=pr
             type=sha
-            type=raw,value=${{ github.ref_name}}
           flavor: |
             latest=false
-            prefix=
-            suffix=
 
       - name: Build and push Docker image
+        if: steps.check-deploy.outputs.should-deploy == 'true'
         id: build
         uses: docker/build-push-action@v6
         with:
@@ -112,255 +105,187 @@ jobs:
           cache-to: type=gha,mode=max
           platforms: linux/amd64
 
-      - name: Generate build summary
-        run: |
-          echo "## 🏗️ Backend Build Summary" >> $GITHUB_STEP_SUMMARY
-          echo "- **Image**: \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Tags**: \`${{ steps.meta.outputs.tags }}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Digest**: \`${{ steps.build.outputs.digest }}\`" >> $GITHUB_STEP_SUMMARY
-
-  deploy-production:
-    name: 🚀 Deploy to VPS (Production)
+  deploy:
+    name: 🚀 Deploy
     runs-on: ubuntu-latest
-    needs: [build-push]
-    if: github.ref == 'refs/heads/main' && github.event.pull_request.head.ref == ''
+    needs: [test-and-build]
+    if: needs.test-and-build.outputs.should-deploy == 'true'
+    outputs:
+      deployment-url: ${{ steps.deploy-result.outputs.deployment-url }}
+      deployment-port: ${{ steps.deploy-result.outputs.deployment-port }}
+      deployment-branch: ${{ steps.deploy-result.outputs.deployment-branch }}
     environment:
-      name: production
+      name: ${{ needs.test-and-build.outputs.deploy-type == 'production' && 'production' || 'staging' }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Extract context
+      - name: Determine deployment context
         id: context
         run: |
-          echo "safe_branch=main" >> $GITHUB_OUTPUT
-
-      - name: Use digest from build-push
-        id: digest
-        run: |
-          echo "digest=${{ needs.build-push.outputs.image-digest }}" >> $GITHUB_OUTPUT
+          case "${{ needs.test-and-build.outputs.deploy-type }}" in
+            "production")
+              echo "branch=production" >> $GITHUB_OUTPUT
+              echo "port=8080" >> $GITHUB_OUTPUT
+              echo "domain=api.ytclipper.com" >> $GITHUB_OUTPUT
+              echo "target-dir=/opt/ytclipper/production/backend" >> $GITHUB_OUTPUT
+              ;;
+            "staging")
+              echo "branch=staging" >> $GITHUB_OUTPUT
+              echo "port=8081" >> $GITHUB_OUTPUT
+              echo "domain=api-staging.ytclipper.com" >> $GITHUB_OUTPUT
+              echo "target-dir=/opt/ytclipper/deployments/staging/backend" >> $GITHUB_OUTPUT
+              ;;
+            "pr")
+              BRANCH="pr-${{ github.event.number }}"
+              PORT_OFFSET=$((${{ github.event.number }} % 100))
+              PORT=$((8100 + $PORT_OFFSET))
+              echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+              echo "port=$PORT" >> $GITHUB_OUTPUT
+              echo "domain=api-$BRANCH.ytclipper.com" >> $GITHUB_OUTPUT
+              echo "target-dir=/opt/ytclipper/deployments/$BRANCH/backend" >> $GITHUB_OUTPUT
+              ;;
+          esac
 
       - name: Create deployment artifacts
         run: |
           mkdir -p deploy-temp
           cp docker/compose.yml deploy-temp/
-          touch deploy-temp/.env
 
           REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
-          echo "BACKEND_IMAGE=ghcr.io/$REPO_LOWER/backend@${{ steps.digest.outputs.digest }}" >> deploy-temp/.env
-          echo "PORT=8080" >> deploy-temp/.env
-          echo "BACKEND_PORT=8080" >> deploy-temp/.env
-          echo "CONTAINER_SUFFIX=${{ steps.context.outputs.safe_branch }}" >> deploy-temp/.env
+          cat > deploy-temp/.env << EOF
+          # Docker configuration
+          BACKEND_IMAGE=ghcr.io/$REPO_LOWER/backend@${{ needs.test-and-build.outputs.image-digest }}
+          BACKEND_PORT=${{ steps.context.outputs.port }}
+          CONTAINER_SUFFIX=${{ steps.context.outputs.branch }}
 
-          echo "DATABASE_URL=${{ secrets.DATABASE_URL }}" >> deploy-temp/.env
-          echo "AUTH0_DOMAIN=${{ secrets.AUTH0_DOMAIN }}" >> deploy-temp/.env
-          echo "AUTH0_CLIENT_ID=${{ secrets.AUTH0_CLIENT_ID }}" >> deploy-temp/.env
-          echo "AUTH0_CLIENT_SECRET=${{ secrets.AUTH0_CLIENT_SECRET }}" >> deploy-temp/.env
-          echo "AUTH0_AUDIENCE=${{ secrets.AUTH0_AUDIENCE }}" >> deploy-temp/.env
-          echo "AUTH0_CALLBACK_URL=${{ secrets.AUTH0_CALLBACK_URL }}" >> deploy-temp/.env
+          # Server configuration
+          PORT=8080
+          ENV=production
+          LOG_LEVEL=info
+          LOG_PRETTY=false
+          GIN_MODE=release
 
-      - name: Upload files to VPS
-        uses: appleboy/scp-action@v0.1.4
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          source: "deploy-temp/*"
-          target: "/opt/ytclipper"
-          strip_components: 1
+          # Database configuration
+          DATABASE_URL=${{ secrets.DATABASE_URL }}
 
-      - name: SSH and deploy
+          # Auth0 configuration
+          AUTH0_DOMAIN=${{ secrets.AUTH0_DOMAIN }}
+          AUTH0_CLIENT_ID=${{ secrets.AUTH0_CLIENT_ID }}
+          AUTH0_CLIENT_SECRET=${{ secrets.AUTH0_CLIENT_SECRET }}
+          AUTH0_AUDIENCE=${{ secrets.AUTH0_AUDIENCE }}
+          AUTH0_CALLBACK_URL=${{ secrets.AUTH0_CALLBACK_URL }}
+
+          # JWT configuration
+          JWT_SECRET=${{ secrets.JWT_SECRET }}
+          AUTH_JWT_SECRET=${{ secrets.AUTH_JWT_SECRET }}
+          AUTH_JWT_EXPIRY_HOURS=72
+          AUTH_TOKEN_ISSUER=ytclipper-app
+
+          # API configuration
+          API_TIMEOUT=30s
+          API_RATE_LIMIT=100
+          EOF
+
+      - name: Deploy to VPS
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
-            cd /opt/ytclipper
-            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
-            docker compose -f compose.yml --env-file .env up -d --no-deps backend
+            set -e
 
-      - name: Configure Nginx for production
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          script: |
-            DOMAIN="api.ytclipper.com"
-            PORT="8080"
-            CONFIG_FILE="/etc/nginx/sites-available/$DOMAIN"
-            sudo bash -c "cat > $CONFIG_FILE" <<EOF
-            server {
-              listen 80;
-              server_name $DOMAIN;
+            TARGET_DIR="${{ steps.context.outputs.target-dir }}"
+            CONTAINER_NAME="ytclipper-${{ steps.context.outputs.branch }}-backend"
+            DOMAIN="${{ steps.context.outputs.domain }}"
+            PORT="${{ steps.context.outputs.port }}"
 
-              return 301 https://\$host\$request_uri;
-            }
+            echo "🚀 Deploying to $TARGET_DIR"
+            echo "🔍 Target container: $CONTAINER_NAME"
+            echo "🔍 Target domain: $DOMAIN"
+            echo "🔍 Target port: $PORT"
 
-            server {
-              listen 443 ssl;
-              server_name $DOMAIN;
-
-              ssl_certificate /etc/letsencrypt/live/ytclipper.com/fullchain.pem;
-              ssl_certificate_key /etc/letsencrypt/live/ytclipper.com/privkey.pem;
-
-              location / {
-                proxy_pass http://localhost:$PORT;
-                proxy_set_header Host \$host;
-                proxy_set_header X-Real-IP \$remote_addr;
-                proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-                proxy_set_header X-Forwarded-Proto \$scheme;
-              }
-            }
-            EOF
-
-            sudo ln -sf $CONFIG_FILE /etc/nginx/sites-enabled/$DOMAIN
-            sudo nginx -t
-            sudo systemctl reload nginx
-
-      - name: Healthcheck
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          script: |
-            if curl -f http://localhost:8080/health; then
-              echo "✅ Backend is healthy"
+            # Ensure shared network exists
+            NETWORK_NAME="ytclipper-shared"
+            if ! docker network ls | grep -q "$NETWORK_NAME"; then
+              echo "🆕 Creating shared network: $NETWORK_NAME"
+              docker network create \
+                --driver bridge \
+                --subnet="172.20.0.0/16" \
+                "$NETWORK_NAME"
+              echo "✅ Shared network created"
             else
-              echo "❌ Backend health check failed"
+              echo "✅ Shared network already exists"
+            fi
+
+            # Create directory
+            mkdir -p "$TARGET_DIR"
+
+            # List current containers for debugging
+            echo "📦 Current containers before deployment:"
+            docker ps -a --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+            # Stop existing container with exact name match only
+            EXISTING_CONTAINER=$(docker ps -aq -f name="^${CONTAINER_NAME}$" || true)
+            if [ -n "$EXISTING_CONTAINER" ]; then
+              echo "🛑 Found existing container with exact name: $CONTAINER_NAME"
+              echo "🛑 Stopping and removing: $CONTAINER_NAME"
+              docker rm -f "$CONTAINER_NAME"
+            else
+              echo "ℹ️  No existing container found with name: $CONTAINER_NAME"
+            fi
+
+            # Verify no port conflicts
+            PORT_IN_USE=$(docker ps --format "table {{.Names}}\t{{.Ports}}" | grep ":$PORT->" || true)
+            if [ -n "$PORT_IN_USE" ]; then
+              echo "⚠️  Warning: Port $PORT is already in use:"
+              echo "$PORT_IN_USE"
+              echo "❌ Deployment aborted due to port conflict"
               exit 1
             fi
 
-      - name: 🎉 Deployment Summary
-        id: deployment_summary
-        run: |
-          echo "deployment_url=https://api.ytclipper.com" >> $GITHUB_OUTPUT
-          echo "deployment_port=8080" >> $GITHUB_OUTPUT
-          echo "deployment_branch=main" >> $GITHUB_OUTPUT
-
-  deploy-staging:
-    name: 🚀 Deploy to VPS (Staging/Other Branches)
-    runs-on: ubuntu-latest
-    needs: [build-push]
-    if: github.ref != 'refs/heads/main'
-    environment:
-      name: staging
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Extract context
-        id: context
-        run: |
-          BRANCH=${GITHUB_REF#refs/heads/}
-          SAFE_BRANCH=$(echo "$BRANCH" | tr '/' '-')
-          echo "safe_branch=$SAFE_BRANCH" >> $GITHUB_OUTPUT
-
-          if [ "$BRANCH" = "staging" ]; then
-            echo "port=8081" >> $GITHUB_OUTPUT
-            echo "domain=api-staging.ytclipper.com" >> $GITHUB_OUTPUT
-            echo "compose_dir=/opt/ytclipper-staging" >> $GITHUB_OUTPUT
-          else
-            RANDOM_PORT=$((9000 + RANDOM % 1000))
-            echo "port=$RANDOM_PORT" >> $GITHUB_OUTPUT
-            echo "domain=$SAFE_BRANCH.ytclipper.com" >> $GITHUB_OUTPUT
-            echo "compose_dir=/opt/ytclipper-staging/$SAFE_BRANCH" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Use digest from build-push
-        id: digest
-        run: |
-          echo "digest=${{ needs.build-push.outputs.image-digest }}" >> $GITHUB_OUTPUT
-
-      - name: Create deployment artifacts
-        run: |
-          mkdir -p deploy-temp
-          cp docker/compose.yml deploy-temp/
-          touch deploy-temp/.env
-
-          REPO_LOWER=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
-          echo "BACKEND_IMAGE=ghcr.io/$REPO_LOWER/backend@${{ steps.digest.outputs.digest }}" >> deploy-temp/.env
-          echo "BACKEND_PORT=${{ steps.context.outputs.port }}" >> deploy-temp/.env
-          echo "CONTAINER_SUFFIX=${{ steps.context.outputs.safe_branch }}" >> deploy-temp/.env
-
-          echo "DATABASE_URL=${{ secrets.DATABASE_URL }}" >> deploy-temp/.env
-          echo "AUTH0_DOMAIN=${{ secrets.AUTH0_DOMAIN }}" >> deploy-temp/.env
-          echo "AUTH0_CLIENT_ID=${{ secrets.AUTH0_CLIENT_ID }}" >> deploy-temp/.env
-          echo "AUTH0_CLIENT_SECRET=${{ secrets.AUTH0_CLIENT_SECRET }}" >> deploy-temp/.env
-          echo "AUTH0_AUDIENCE=${{ secrets.AUTH0_AUDIENCE }}" >> deploy-temp/.env
-          echo "AUTH0_CALLBACK_URL=${{ secrets.AUTH0_CALLBACK_URL }}" >> deploy-temp/.env
-
-      - name: Create target dir on VPS
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          script: |
-            mkdir -p ${{ steps.context.outputs.compose_dir }}
-
-      - name: Upload to VPS
+      - name: Upload deployment files
         uses: appleboy/scp-action@v0.1.4
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           source: "deploy-temp/*"
-          target: "${{ steps.context.outputs.compose_dir }}"
+          target: "${{ steps.context.outputs.target-dir }}"
           strip_components: 1
 
-      - name: SSH and deploy
+      - name: Start services and configure nginx
         uses: appleboy/ssh-action@master
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
-            cd ${{ steps.context.outputs.compose_dir }}
-            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
+            set -e
 
-            CONTAINER_SUFFIX=${{ steps.context.outputs.safe_branch }}
-            API_CONTAINER_NAME="ytclipper-${CONTAINER_SUFFIX}-backend"
-
-            echo "Checking for the existing container: $API_CONTAINER_NAME"
-
-            if [ "$(docker ps -aq -f name=^/${API_CONTAINER_NAME}$)" ]; then
-              echo "Stopping existing container: $API_CONTAINER_NAME"
-              docker rm -f $API_CONTAINER_NAME
-            fi
-
-            docker compose -p $API_CONTAINER_NAME -f compose.yml --env-file .env up -d --no-deps backend
-
-      - name: Configure Nginx for subdomain
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          script: |
-            DOMAIN="api-${{ steps.context.outputs.safe_branch }}.ytclipper.com"
+            TARGET_DIR="${{ steps.context.outputs.target-dir }}"
+            DOMAIN="${{ steps.context.outputs.domain }}"
             PORT="${{ steps.context.outputs.port }}"
-            CONFIG_FILE="/etc/nginx/sites-available/$DOMAIN"
 
-            sudo bash -c "cat > $CONFIG_FILE" <<EOF
+            # Login to registry and start container
+            cd "$TARGET_DIR"
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
+            docker compose -f compose.yml --env-file .env up -d --no-deps backend
+
+            # Configure nginx
+            sudo tee /etc/nginx/sites-available/$DOMAIN > /dev/null << EOF
             server {
               listen 80;
               server_name $DOMAIN;
-
               return 301 https://\$host\$request_uri;
             }
-
             server {
               listen 443 ssl;
               server_name $DOMAIN;
-
               ssl_certificate /etc/letsencrypt/live/ytclipper.com/fullchain.pem;
               ssl_certificate_key /etc/letsencrypt/live/ytclipper.com/privkey.pem;
-
               location / {
                 proxy_pass http://localhost:$PORT;
                 proxy_set_header Host \$host;
@@ -371,59 +296,192 @@ jobs:
             }
             EOF
 
-            sudo ln -sf $CONFIG_FILE /etc/nginx/sites-enabled/$DOMAIN
-            sudo nginx -t
-            sudo systemctl reload nginx
+            sudo ln -sf "/etc/nginx/sites-available/$DOMAIN" "/etc/nginx/sites-enabled/$DOMAIN"
+            sudo nginx -t && sudo systemctl reload nginx
 
-      - name: 🎉 Deployment Summary
-        id: deployment_summary
+      - name: Health check
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            PORT="${{ steps.context.outputs.port }}"
+
+            # Wait for service to be ready
+            for i in {1..30}; do
+              if curl -f -s http://localhost:$PORT/health > /dev/null; then
+                echo "✅ Service is healthy on port $PORT"
+                exit 0
+              fi
+              echo "⏳ Waiting for service to be ready... ($i/30)"
+              sleep 2
+            done
+
+            echo "❌ Health check failed after 60 seconds"
+            exit 1
+
+      - name: Set deployment outputs
+        id: deploy-result
         run: |
-          echo "deployment_url=https://api-${{ steps.context.outputs.domain }}" >> $GITHUB_OUTPUT
-          echo "deployment_port=${{ steps.context.outputs.port }}" >> $GITHUB_OUTPUT
-          echo "deployment_branch=${{ steps.context.outputs.safe_branch }}" >> $GITHUB_OUTPUT
-
-      - run: |
-          echo "🎉 Staging Deployment was created successfully!"
-          echo "🔗 URL: https://api-${{ steps.context.outputs.domain }}"
-          echo "📦 Branch: ${{ steps.context.outputs.safe_branch }}"
-          echo "🔢 Port: ${{ steps.context.outputs.port }}"
+          echo "deployment-url=https://${{ steps.context.outputs.domain }}" >> $GITHUB_OUTPUT
+          echo "deployment-port=${{ steps.context.outputs.port }}" >> $GITHUB_OUTPUT
+          echo "deployment-branch=${{ steps.context.outputs.branch }}" >> $GITHUB_OUTPUT
 
   comment-pr:
-    name: Comment on PR with Deployment Summary
+    name: 💬 Comment on PR
     runs-on: ubuntu-latest
-    needs: [deploy-staging]
+    needs: [deploy]
+    if: always() && github.event_name == 'pull_request'
     permissions:
       pull-requests: write
       contents: read
 
     steps:
-      - name: Create deployment URL comment
+      - name: Comment on successful deployment
+        if: needs.deploy.result == 'success'
         uses: marocchino/sticky-pull-request-comment@v2.1.0
         with:
-          header: "deployment-info"
+          header: "backend-deployment"
           message: |
-            **🚀 Deployment Status: Ready**
+            ## 🚀 Backend Deployment Successful!
 
-            🎉 Staging deployment created successfully!
+            Your backend changes have been deployed and are ready for testing:
 
-            - **🔗 URL**: https://${{ needs.deploy-staging.outputs.deployment_url }}
-            - **📦 Branch**: ${{ needs.deploy-staging.outputs.deployment_branch }}
-            - **🔢 Port**: ${{ needs.deploy-staging.outputs.deployment_port }}
-            - **🕒 Last Update**: ${{ env.DEPLOYMENT_TIME }} UTC
+            - **🔗 URL**: ${{ needs.deploy.outputs.deployment-url }}
+            - **📦 Branch**: ${{ needs.deploy.outputs.deployment-branch }}
+            - **🔢 Port**: ${{ needs.deploy.outputs.deployment-port }}
+            - **⏰ Deployed**: ${{ github.event.head_commit.timestamp }}
 
-            _Deployed by GitHub Actions • Updates automatically on new commits_
-          recreate: true
-          number: ${{ github.event.pull_request.number }}
+            _This deployment will be automatically cleaned up when the PR is closed._
 
-      - name: Add troubleshooting info
-        if: failure()
+      - name: Comment on failed deployment
+        if: needs.deploy.result == 'failure'
         uses: marocchino/sticky-pull-request-comment@v2.1.0
         with:
-          header: "deployment-error"
+          header: "backend-deployment"
           message: |
-            **❌ Deployment Failed**
+            ## ❌ Backend Deployment Failed
 
-            Deployment to staging failed. Please check workflow logs:
-            ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          recreate: true
-          number: ${{ github.event.pull_request.number }}
+            The deployment failed. Please check the [workflow logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}) for details.
+
+            Common issues:
+            - Build errors
+            - VPS connectivity issues
+            - Port conflicts
+            - Database connection issues
+
+            _Push new changes to retry the deployment._
+
+  cleanup-pr:
+    name: 🧹 Cleanup PR Deployment
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request' && github.event.action == 'closed'
+    steps:
+      - name: Cleanup deployment
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          script: |
+            set -e
+
+            BRANCH="pr-${{ github.event.number }}"
+            CONTAINER_NAME="ytclipper-$BRANCH-backend"
+            DOMAIN="api-$BRANCH.ytclipper.com"
+            DEPLOYMENT_DIR="/opt/ytclipper/deployments/$BRANCH"
+
+            echo "🧹 Cleaning up backend deployment for $BRANCH"
+            echo "🔍 Looking for container: $CONTAINER_NAME"
+            echo "🔍 Looking for domain: $DOMAIN"
+            echo "🔍 Looking for directory: $DEPLOYMENT_DIR"
+
+            # List all containers to help debug
+            echo "📦 Current containers:"
+            docker ps -a --format "table {{.Names}}\t{{.Status}}"
+
+            # Stop and remove container (try both exact and partial matches)
+            CONTAINERS_FOUND=$(docker ps -aq -f name="$CONTAINER_NAME" || true)
+            if [ -n "$CONTAINERS_FOUND" ]; then
+              echo "✅ Found containers: $CONTAINERS_FOUND"
+              echo "🛑 Stopping and removing container: $CONTAINER_NAME"
+              docker rm -f "$CONTAINER_NAME"
+            else
+              echo "ℹ️  No containers found with name: $CONTAINER_NAME"
+              # Try to find containers with partial name match
+              PARTIAL_CONTAINERS=$(docker ps -aq --filter "name=ytclipper-$BRANCH" || true)
+              if [ -n "$PARTIAL_CONTAINERS" ]; then
+                echo "✅ Found containers with partial match: $PARTIAL_CONTAINERS"
+                for container in $PARTIAL_CONTAINERS; do
+                  CONTAINER_NAME_FULL=$(docker ps -a --format "{{.Names}}" --filter "id=$container")
+                  echo "🛑 Stopping and removing container: $CONTAINER_NAME_FULL"
+                  docker rm -f "$container"
+                done
+              else
+                echo "ℹ️  No containers found for branch: $BRANCH"
+              fi
+            fi
+
+            # Remove nginx config
+            echo "🗑️  Removing nginx configuration..."
+            if [ -f "/etc/nginx/sites-enabled/$DOMAIN" ]; then
+              sudo rm -f "/etc/nginx/sites-enabled/$DOMAIN"
+              echo "✅ Removed nginx sites-enabled: $DOMAIN"
+            else
+              echo "ℹ️  No nginx sites-enabled found: $DOMAIN"
+            fi
+
+            if [ -f "/etc/nginx/sites-available/$DOMAIN" ]; then
+              sudo rm -f "/etc/nginx/sites-available/$DOMAIN"
+              echo "✅ Removed nginx sites-available: $DOMAIN"
+            else
+              echo "ℹ️  No nginx sites-available found: $DOMAIN"
+            fi
+
+            # Test nginx configuration
+            if sudo nginx -t 2>/dev/null; then
+              sudo systemctl reload nginx
+              echo "✅ Nginx configuration reloaded"
+            else
+              echo "⚠️  Nginx configuration test failed, but continuing cleanup"
+            fi
+
+            # Remove deployment directory
+            echo "🗑️  Removing deployment directory..."
+            if [ -d "$DEPLOYMENT_DIR/backend" ]; then
+              rm -rf "$DEPLOYMENT_DIR/backend"
+              echo "✅ Removed backend directory: $DEPLOYMENT_DIR/backend"
+            else
+              echo "ℹ️  No backend directory found: $DEPLOYMENT_DIR/backend"
+            fi
+
+            # Remove parent directory if empty
+            if [ -d "$DEPLOYMENT_DIR" ]; then
+              if [ -z "$(ls -A "$DEPLOYMENT_DIR" 2>/dev/null)" ]; then
+                rm -rf "$DEPLOYMENT_DIR"
+                echo "✅ Removed empty deployment directory: $DEPLOYMENT_DIR"
+              else
+                echo "ℹ️  Deployment directory not empty, keeping: $DEPLOYMENT_DIR"
+                echo "📁 Contents: $(ls -la "$DEPLOYMENT_DIR")"
+              fi
+            else
+              echo "ℹ️  No deployment directory found: $DEPLOYMENT_DIR"
+            fi
+
+            echo "✅ Backend cleanup completed for $BRANCH"
+
+      - name: Comment on cleanup
+        uses: marocchino/sticky-pull-request-comment@v2.1.0
+        with:
+          header: "backend-deployment"
+          message: |
+            ## 🧹 Deployment Cleaned Up
+
+            The staging deployment for this PR has been automatically removed.
+
+            - **Container**: Stopped and removed
+            - **Nginx config**: Removed
+            - **Files**: Cleaned up
+
+            _Deployment resources have been freed up._

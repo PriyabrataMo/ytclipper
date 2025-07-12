@@ -31,3 +31,25 @@ export interface AuthResponse {
   error?: string;
   message?: string;
 }
+export interface UserInfo {
+  sub: string;
+  name: string;
+  email: string;
+  picture?: string;
+  [key: string]: unknown;
+}
+
+export interface AuthStorage {
+  auth0_token?: string;
+  token_expiry?: number;
+  user_info?: UserInfo;
+}
+
+export type AuthMessage =
+  | {
+      type: 'AUTH0_TOKEN_UPDATE';
+      token: string;
+      expiry: number;
+      user: UserInfo;
+    }
+  | { type: 'AUTH0_LOGOUT' };

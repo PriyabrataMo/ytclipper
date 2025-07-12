@@ -59,7 +59,9 @@ export const FloatingTimestampButton: React.FC<
     setForm({ title: '', note: '' });
   };
 
-  if (!isVisible) return null;
+  if (!isVisible) {
+    return null;
+  }
 
   return (
     <div className='ytclipper-floating-container'>

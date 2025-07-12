@@ -6,25 +6,33 @@ WORKDIR /app
 COPY pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY package.json ./
 COPY turbo.json ./
+
+# Copy all package.json files for workspace packages
 COPY apps/app/package.json ./apps/app/
 COPY packages/ui/package.json ./packages/ui/
+COPY packages/eslint-config/package.json ./packages/eslint-config/
+COPY packages/prettier-config/package.json ./packages/prettier-config/
+COPY packages/tailwind-config/package.json ./packages/tailwind-config/
 
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
 # Install dependencies using pnpm
 RUN pnpm install --frozen-lockfile
 
-# Copy application source code
+# Copy application source code and all workspace packages
 COPY apps/app/ ./apps/app/
 COPY packages/ui/ ./packages/ui/
+COPY packages/eslint-config/ ./packages/eslint-config/
+COPY packages/prettier-config/ ./packages/prettier-config/
+COPY packages/tailwind-config/ ./packages/tailwind-config/
 
 # Environment variables for build
 ARG VITE_ENVIRONMENT
 
 ENV VITE_ENVIRONMENT=$VITE_ENVIRONMENT
 
-# Build the UI package and the app
-RUN pnpm turbo run build --filter=ui --filter=app
+# Build the packages and the app in the correct order
+RUN pnpm turbo run build --filter=@ytclipper/ui --filter=app
 
 # Runtime stage
 FROM nginx:alpine

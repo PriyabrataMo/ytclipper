@@ -14,13 +14,17 @@ const LogoutButton = () => {
 
   return (
     <Button
-      onClick={() =>
+      onClick={() => {
+        window.postMessage(
+          { type: 'AUTH0_LOGOUT', timestamp: Date.now() },
+          'http://localhost:5173',
+        );
         logout({
           logoutParams: {
             returnTo: window.location.origin,
           },
-        })
-      }
+        });
+      }}
       variant='outline'
       className='border-red-500 text-red-500 hover:bg-red-50'
     >

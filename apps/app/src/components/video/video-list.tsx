@@ -1,4 +1,4 @@
-import type { Video } from '../../types';
+import { type Video } from '@/types';
 
 import { VideoCard } from './video-card';
 

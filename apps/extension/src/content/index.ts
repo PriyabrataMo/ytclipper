@@ -1,6 +1,8 @@
 import './content.css';
-import './style.css';
 
+interface ClipperState {
+  clipper_enabled?: boolean;
+}
 // TypeScript interfaces
 interface Timestamp {
   id: string;
@@ -21,189 +23,359 @@ class YouTubeHandler {
   private player: HTMLVideoElement | null = null;
   private currentVideoId: string | null = null;
   private observers: MutationObserver[] = [];
-  private floatingButton: HTMLDivElement | null = null;
-  private floatingButtonTimeout: number | null = null;
   private isAuthenticated: boolean = true;
+  private clipperEnabled: boolean = true;
+  private clipButton: HTMLButtonElement | null = null;
+  private notePanel: HTMLElement | null = null;
+  private currentTimestamp: number | null = null;
+  private tagsContainer: HTMLElement | null = null;
 
   constructor() {
     this.init();
+    this.initializeClipperState();
   }
 
   private init() {
-    console.log('YouTube Handler initialized');
     this.checkAuthentication();
     this.waitForPlayer();
     this.observeUrlChanges();
-    this.setupAuthListener();
-    this.injectUI();
   }
 
-  private setupAuthListener() {
-    // Listen for authentication changes
-    chrome.storage.onChanged.addListener((changes, namespace) => {
-      if (namespace === 'local' && (changes.authToken || changes.currentUser)) {
-        this.checkAuthentication().then(() => {
-          if (!this.isAuthenticated) {
-            this.hideFloatingButton();
-          }
-        });
-      }
-    });
+  private initializeClipperState() {
+    try {
+      const result = chrome.storage.sync.get('clipper_enabled') as ClipperState;
+      this.clipperEnabled = result?.clipper_enabled ?? true;
+    } catch (error) {
+      console.error('Failed to initialize clipper state:', error);
+      this.clipperEnabled = true;
+    }
+  }
+
+  handleClipperToggle(enabled: boolean) {
+    this.clipperEnabled = enabled;
+    this.updateClipButtonVisibility();
   }
 
   private async checkAuthentication() {
     try {
-      const result = await chrome.storage.local.get([
-        'authToken',
-        'currentUser',
+      const result = await chrome.storage.sync.get([
+        'auth0_token',
+        'user_info',
       ]);
 
-      this.isAuthenticated = !!(result.authToken && result.currentUser);
+      this.isAuthenticated = !!(result.auth0_token && result.user_info);
+      this.updateClipButtonVisibility();
     } catch (error) {
       console.error('Failed to check authentication:', error);
       this.isAuthenticated = false;
+      this.updateClipButtonVisibility();
     }
   }
 
   private waitForPlayer() {
     const checkPlayer = () => {
       this.player = document.querySelector('video') as HTMLVideoElement;
+      console.log('Checking for YouTube player:', this.player);
       if (this.player) {
-        this.setupPlayerEvents();
         this.detectVideoChange();
+        this.injectClipButton();
       } else {
         setTimeout(checkPlayer, 1000);
       }
     };
 
+    console.log('Waiting for YouTube player...');
     checkPlayer();
   }
 
-  private setupPlayerEvents() {
-    if (!this.player) return;
+  private injectClipButton() {
+    const controlBar = document.querySelector('.ytp-chrome-controls');
 
-    // Add keyboard shortcut for quick timestamp saving (Ctrl+Shift+T)
-    document.addEventListener('keydown', (e) => {
-      if (e.ctrlKey && e.shiftKey && e.key === 'T') {
-        e.preventDefault();
-        this.saveQuickTimestamp();
-      }
-    });
-
-    // Show floating button after 10 seconds of video play
-    this.player.addEventListener('play', () => {
-      this.scheduleFloatingButton();
-    });
-
-    this.player.addEventListener('pause', () => {
-      this.clearFloatingButtonSchedule();
-    });
-  }
-
-  private scheduleFloatingButton() {
-    if (!this.isAuthenticated) return;
-
-    this.clearFloatingButtonSchedule();
-    this.floatingButtonTimeout = window.setTimeout(() => {
-      this.showFloatingButton();
-    }, 10000); // Show after 10 seconds
-  }
-
-  private clearFloatingButtonSchedule() {
-    if (this.floatingButtonTimeout) {
-      clearTimeout(this.floatingButtonTimeout);
-      this.floatingButtonTimeout = null;
+    if (!controlBar) {
+      setTimeout(() => this.injectClipButton(), 500);
+      return;
     }
+    this.clipButton = document.createElement('button');
+    this.clipButton.id = 'yt-clipper-button';
+    this.clipButton.className = 'ytp-button yt-clipper-custom';
+    this.clipButton.title = 'Save clip at current time';
+    this.clipButton.setAttribute('aria-label', 'Save clip at current time');
+
+    const textSpan = document.createElement('span');
+    textSpan.textContent = 'Quick Note';
+    textSpan.style.cssText = `
+    pointer-events: none;
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+  `;
+    this.clipButton.appendChild(textSpan);
+
+    this.clipButton.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      this.openNotePanel();
+    });
+    controlBar.appendChild(this.clipButton);
+    this.updateClipButtonStyles();
+    this.updateClipButtonVisibility();
   }
 
-  private showFloatingButton() {
-    if (this.floatingButton || !this.isAuthenticated) return;
+  injectNotePanel() {
+    if (document.getElementById('yt-clipper-note-panel')) {
+      return;
+    }
 
-    this.floatingButton = document.createElement('div');
-    this.floatingButton.className = 'ytclipper-floating-container';
-    this.floatingButton.innerHTML = this.createFloatingButtonHTML();
-
-    document.body.appendChild(this.floatingButton);
-
-    // Add event listeners
-    this.setupFloatingButtonEvents();
-  }
-
-  private createFloatingButtonHTML(): string {
-    const currentTime = this.player?.currentTime ?? 0;
-    const formattedTime = this.formatTime(currentTime);
-
-    return `
-      <div class="ytclipper-floating-button">
-        <button class="ytclipper-quick-add" data-action="quick-add" title="Add timestamp at ${formattedTime}">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="10"/>
-            <polyline points="12,6 12,12 16,14"/>
-          </svg>
-          <span>${formattedTime}</span>
-        </button>
-        
-        <button class="ytclipper-detailed-add" data-action="detailed-add" title="Add timestamp with details">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="12" y1="5" x2="12" y2="19"/>
-            <line x1="5" y1="12" x2="19" y2="12"/>
-          </svg>
-        </button>
-        
-        <button class="ytclipper-close" data-action="close" title="Close timestamp tool">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="18" y1="6" x2="6" y2="18"/>
-            <line x1="6" y1="6" x2="18" y2="18"/>
-          </svg>
-        </button>
+    const panelHTML = `
+      <div class="yt-clipper-note-panel" id="yt-clipper-note-panel">
+        <div class="yt-clipper-panel-header">
+          <div class="yt-clipper-panel-title">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            </svg>
+            Add Note
+          </div>
+          <button class="yt-clipper-close-btn" id="yt-clipper-close-btn">×</button>
+        </div>
+        <div class="yt-clipper-timestamp-info" id="yt-clipper-timestamp-info">
+          📍 Current time: <strong>0:00</strong>
+        </div>
+        <form class="yt-clipper-note-form">
+          <div class="yt-clipper-form-group">
+            <label class="yt-clipper-form-label">Quick Actions</label>
+            <div class="yt-clipper-quick-actions">
+              <button type="button" class="yt-clipper-quick-action" data-note="Important moment">⭐ Important</button>
+              <button type="button" class="yt-clipper-quick-action" data-note="Key insight">💡 Insight</button>
+              <button type="button" class="yt-clipper-quick-action" data-note="Question">❓ Question</button>
+              <button type="button" class="yt-clipper-quick-action" data-note="Action item">✅ Action</button>
+            </div>
+          </div>
+          <div class="yt-clipper-form-group">
+            <label class="yt-clipper-form-label" for="yt-clipper-noteTitle">Note Title</label>
+            <input type="text" id="yt-clipper-noteTitle" class="yt-clipper-form-input" placeholder="Give your note a title..." />
+          </div>
+          <div class="yt-clipper-form-group">
+            <label class="yt-clipper-form-label" for="yt-clipper-noteContent">Note Content</label>
+            <textarea id="yt-clipper-noteContent" class="yt-clipper-form-input yt-clipper-form-textarea" placeholder="Write your note here..."></textarea>
+          </div>
+          <div class="yt-clipper-form-group">
+            <label class="yt-clipper-form-label" for="yt-clipper-noteTags">Tags</label>
+            <input type="text" id="yt-clipper-noteTags" class="yt-clipper-form-input" placeholder="Add tags (press Enter to add)" />
+            <div class="yt-clipper-tags-input" id="yt-clipper-tags-container"></div>
+          </div>
+        </form>
+        <div class="yt-clipper-action-buttons">
+          <button class="yt-clipper-btn yt-clipper-btn-secondary" id="yt-clipper-cancel-btn">Cancel</button>
+          <button class="yt-clipper-btn yt-clipper-btn-primary" id="yt-clipper-save-btn">Save Note</button>
+        </div>
       </div>
     `;
+
+    const panelContainer = document.createElement('div');
+    panelContainer.innerHTML = panelHTML;
+    document.body.appendChild(panelContainer);
+    this.notePanel = document.getElementById('yt-clipper-note-panel');
+    this.tagsContainer = document.getElementById('yt-clipper-tags-container');
+
+    this.setupPanelEvents();
   }
 
-  private setupFloatingButtonEvents() {
-    if (!this.floatingButton) return;
+  private setupPanelEvents() {
+    // Panel toggle
+    document
+      .getElementById('yt-clipper-close-btn')
+      ?.addEventListener('click', () => this.togglePanel(false));
+    document
+      .getElementById('yt-clipper-cancel-btn')
+      ?.addEventListener('click', () => this.togglePanel(false));
 
-    this.floatingButton.addEventListener('click', (e) => {
-      const target = e.target as HTMLElement;
-      const button = target.closest('button') as HTMLButtonElement;
-      const action = button?.dataset.action;
+    // Save handler
+    document
+      .getElementById('yt-clipper-save-btn')
+      ?.addEventListener('click', () => this.saveNoteFromPanel());
 
-      switch (action) {
-        case 'quick-add':
-          this.handleQuickAddFromFloat();
-          break;
+    // Quick actions
+    document.querySelectorAll('.quick-action').forEach((button) => {
+      button.addEventListener('click', (e) => {
+        const noteText = (e.target as HTMLElement).dataset.note || '';
+        this.setQuickNote(noteText);
+      });
+    });
 
-        case 'detailed-add':
-          this.handleDetailedAddFromFloat();
-          break;
+    // Tags input
+    document
+      .getElementById('yt-clipper-noteTags')
+      ?.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          const input = e.target as HTMLInputElement;
+          const tagText = input.value.trim();
+          if (tagText) {
+            this.addTag(tagText);
+            input.value = '';
+          }
+        }
+      });
 
-        case 'close':
-          this.hideFloatingButton();
-          break;
-
-        default:
-          // Unknown action, do nothing
-          break;
+    // Escape key to close
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && this.notePanel?.classList.contains('open')) {
+        this.togglePanel(false);
       }
     });
   }
 
-  private async handleQuickAddFromFloat() {
-    await this.saveQuickTimestamp();
-    this.hideFloatingButton();
-  }
-
-  private handleDetailedAddFromFloat() {
-    // For now, just do quick add. Could expand to show form later
-    this.handleQuickAddFromFloat();
-  }
-
-  private hideFloatingButton() {
-    if (this.floatingButton) {
-      this.floatingButton.remove();
-      this.floatingButton = null;
+  private addTag(tagText: string) {
+    if (!this.tagsContainer) {
+      return;
     }
-    this.clearFloatingButtonSchedule();
+
+    const tag = document.createElement('div');
+    tag.className = 'tag';
+    tag.innerHTML = `${tagText} <span class="tag-remove">×</span>`;
+    this.tagsContainer.appendChild(tag);
+
+    tag.querySelector('.tag-remove')?.addEventListener('click', () => {
+      tag.remove();
+    });
+  }
+
+  private togglePanel(open: boolean) {
+    if (!this.notePanel) {
+      return;
+    }
+
+    const videoContainer = document.querySelector('.html5-video-player');
+    if (open) {
+      this.notePanel.classList.add('open');
+      videoContainer?.classList.add('yt-clipper-panel-open');
+      setTimeout(() => {
+        (
+          document.getElementById('yt-clipper-noteTitle') as HTMLInputElement
+        )?.focus();
+      }, 300);
+    } else {
+      this.notePanel.classList.remove('open');
+      videoContainer?.classList.remove('panel-open');
+    }
+  }
+
+  private setQuickNote(noteText: string) {
+    const titleInput = document.getElementById(
+      'yt-clipper-noteTitle',
+    ) as HTMLInputElement;
+    const contentInput = document.getElementById(
+      'yt-clipper-noteContent',
+    ) as HTMLTextAreaElement;
+
+    if (!titleInput.value) {
+      titleInput.value = noteText;
+    }
+
+    contentInput.focus();
+  }
+
+  private openNotePanel() {
+    if (!this.player || !this.currentVideoId) {
+      return;
+    }
+
+    this.currentTimestamp = this.player.currentTime;
+    const pageData = this.getPageData();
+    if (!pageData) {
+      return;
+    }
+
+    // Update timestamp info
+    const timestampInfo = document.getElementById('yt-clipper-timestamp-info');
+    if (timestampInfo) {
+      timestampInfo.innerHTML = `📍 Current time: <strong>${this.formatTime(this.currentTimestamp)}</strong> | Video: "${pageData.title}"`;
+    }
+
+    // Reset form
+    (
+      document.getElementById('yt-clipper-noteTitle') as HTMLInputElement
+    ).value = '';
+    (
+      document.getElementById('yt-clipper-noteContent') as HTMLTextAreaElement
+    ).value = '';
+    if (this.tagsContainer) {
+      this.tagsContainer.innerHTML = '';
+    }
+
+    this.togglePanel(true);
+  }
+
+  private updateClipButtonStyles() {
+    const button = this.clipButton;
+    if (!button) {
+      return;
+    }
+
+    // Position button at center of bottom control bar
+    button.style.cssText = `
+    position: absolute !important;
+    left: 50% !important;
+    top: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    background: rgba(0, 0, 0, 0.8) !important;
+    border: 2px solid #FF6B35 !important;
+    border-radius: 10px !important;
+    color: #FF6B35 !important;
+    cursor: pointer !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 74px !important;
+    height: 40px !important;
+    z-index: 1000 !important;
+    transition: all 0.2s ease !important;
+    opacity: 0.9 !important;
+    font-size: 12px !important;
+    outline: none !important;
+    box-sizing: border-box !important;
+    backdrop-filter: blur(4px) !important;
+    color: white;
+  `;
+
+    // Add hover and interaction effects
+    button.addEventListener('mouseenter', () => {
+      button.style.backgroundColor = '#FF6B35 !important';
+      button.style.color = 'white !important';
+      button.style.opacity = '1 !important';
+      button.style.transform = 'translate(-50%, -50%) scale(1.1) !important';
+      button.style.boxShadow = '0 4px 12px rgba(255, 107, 53, 0.4) !important';
+    });
+
+    button.addEventListener('mouseleave', () => {
+      button.style.backgroundColor = 'rgba(0, 0, 0, 0.8) !important';
+      button.style.color = '#FF6B35 !important';
+      button.style.opacity = '0.9 !important';
+      button.style.transform = 'translate(-50%, -50%) scale(1) !important';
+      button.style.boxShadow = 'none !important';
+    });
+
+    button.addEventListener('mousedown', () => {
+      button.style.transform = 'translate(-50%, -50%) scale(0.95) !important';
+    });
+
+    button.addEventListener('mouseup', () => {
+      button.style.transform = 'translate(-50%, -50%) scale(1.1) !important';
+    });
+  }
+
+  private updateClipButtonVisibility() {
+    if (!this.clipButton) {
+      return;
+    }
+
+    if (this.isAuthenticated && this.clipperEnabled) {
+      this.clipButton.style.display = 'flex !important';
+      this.clipButton.style.opacity = '0.9 !important';
+    } else {
+      this.clipButton.style.display = 'none !important';
+      this.clipButton.style.opacity = '0 !important';
+    }
   }
 
   private observeUrlChanges() {
@@ -213,6 +385,10 @@ class YouTubeHandler {
       if (location.href !== lastUrl) {
         lastUrl = location.href;
         this.detectVideoChange();
+      }
+
+      if (!this.clipButton && document.querySelector('.html5-video-player')) {
+        this.injectClipButton();
       }
     });
 
@@ -230,13 +406,14 @@ class YouTubeHandler {
 
     if (videoId && videoId !== this.currentVideoId) {
       this.currentVideoId = videoId;
-      this.hideFloatingButton(); // Hide floating button when video changes
       this.loadTimestamps();
     }
   }
 
   private async loadTimestamps() {
-    if (!this.currentVideoId) return;
+    if (!this.currentVideoId) {
+      return;
+    }
 
     try {
       const response = await chrome.runtime.sendMessage({
@@ -293,39 +470,10 @@ class YouTubeHandler {
     container.appendChild(marker);
   }
 
-  async saveQuickTimestamp() {
-    if (!this.player || !this.currentVideoId) return;
-
-    const pageData = this.getPageData();
-
-    if (!pageData) return;
-
-    try {
-      const response = await chrome.runtime.sendMessage({
-        type: 'SAVE_TIMESTAMP',
-        data: {
-          videoId: pageData.videoId,
-          timestamp: pageData.currentTime,
-          title: `Timestamp at ${this.formatTime(pageData.currentTime)}`,
-          note: '',
-          tags: [],
-        },
-      });
-
-      if (response.success) {
-        this.showNotification('Timestamp saved!');
-        this.loadTimestamps(); // Refresh timestamp display
-      } else {
-        this.showNotification('Failed to save timestamp', 'error');
-      }
-    } catch (error) {
-      console.log('Error saving timestamp:', error);
-      this.showNotification('Failed to save timestamp', 'error');
-    }
-  }
-
   private getPageData(): YouTubePageData | null {
-    if (!this.player || !this.currentVideoId) return null;
+    if (!this.player || !this.currentVideoId) {
+      return null;
+    }
 
     const titleElement = document.querySelector(
       'h1.ytd-watch-metadata yt-formatted-string',
@@ -383,53 +531,126 @@ class YouTubeHandler {
     }, 3000);
   }
 
-  private injectUI() {
-    // Inject the timestamp collection UI component
-    const script = document.createElement('script');
-
-    script.src = chrome.runtime.getURL('src/content-ui/index.js');
-    document.head.appendChild(script);
-  }
-
   public destroy() {
     this.observers.forEach((observer) => observer.disconnect());
-    this.hideFloatingButton();
+    if (this.clipButton) {
+      this.clipButton.remove();
+      this.clipButton = null;
+    }
+  }
+  private saveNoteFromPanel() {
+    const titleInput = document.getElementById(
+      'yt-clipper-noteTitle',
+    ) as HTMLInputElement;
+    const contentInput = document.getElementById(
+      'yt-clipper-noteContent',
+    ) as HTMLTextAreaElement;
+
+    const title = titleInput.value.trim();
+    const content = contentInput.value.trim();
+
+    if (!title && !content) {
+      this.showNotification('Please add a title or content for your note.');
+      return;
+    }
+
+    // Collect tags
+    const tags: string[] = [];
+    this.tagsContainer?.querySelectorAll('.tag').forEach((tagEl) => {
+      const tagText = tagEl.childNodes[0].textContent?.trim();
+      if (tagText) {
+        tags.push(tagText);
+      }
+    });
+
+    // Save using existing functionality
+    if (this.currentVideoId && this.currentTimestamp !== null) {
+      chrome.runtime.sendMessage(
+        {
+          type: 'SAVE_TIMESTAMP',
+          data: {
+            videoId: this.currentVideoId,
+            timestamp: this.currentTimestamp,
+            title: title || `Note at ${this.formatTime(this.currentTimestamp)}`,
+            note: content,
+            tags,
+          },
+        },
+        (response) => {
+          if (response.success) {
+            this.showNotification('Note saved successfully!');
+            this.togglePanel(false);
+            this.loadTimestamps();
+          } else {
+            this.showNotification('Failed to save note', 'error');
+          }
+        },
+      );
+    }
   }
 }
 
-// Initialize the YouTube handler
+const style = document.createElement('style');
+style.textContent = `
+
+`;
+document.head.appendChild(style);
+
 const youtubeHandler = new YouTubeHandler();
+youtubeHandler.injectNotePanel();
 
-const iframe = document.createElement('iframe');
-iframe.src = 'http://localhost:5173/auth-bridge';
-iframe.style.display = 'none';
-document.body.appendChild(iframe);
-
-iframe.onload = () => {
-  console.log('Auth bridge iframe loaded');
-  iframe.contentWindow?.postMessage(
-    {
-      type: 'TESTING',
-    },
-    '*',
-  );
-};
-
-// Cleanup on page unload
 window.addEventListener('beforeunload', () => {
   youtubeHandler.destroy();
 });
 
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  // Forward message to the page
-  window.postMessage(message, '*');
+console.log('Content script loaded on:', window.location.href);
+
+window.addEventListener('load', () => {
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('source') === 'extension') {
+    const indicator = document.createElement('div');
+    indicator.style.cssText = `
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      background: #007bff;
+      color: white;
+      padding: 10px 15px;
+      border-radius: 6px;
+      font-size: 14px;
+      z-index: 9999;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    `;
+    indicator.textContent = 'Login to continue using YT Clipper extension';
+    document.body.appendChild(indicator);
+
+    setTimeout(() => {
+      indicator.remove();
+    }, 8000);
+  }
 });
 
 window.addEventListener('message', (event) => {
-  if (event.data?.type === 'AUTH_STATUS_RESPONSE') {
+  if (event.origin !== 'http://localhost:5173') {
+    return;
+  }
+
+  if (event.data.type === 'AUTH0_TOKEN_UPDATE') {
     chrome.runtime.sendMessage({
-      type: 'AUTH_STATUS_RESPONSE',
-      data: event.data,
+      type: 'AUTH0_TOKEN_UPDATE',
+      token: event.data.token,
+      expiry: event.data.expiry,
+      user: event.data.user,
     });
+  }
+
+  if (event.data.type === 'AUTH0_LOGOUT') {
+    chrome.runtime.sendMessage({ type: 'AUTH0_LOGOUT' });
+  }
+});
+
+chrome.runtime.onMessage.addListener((message) => {
+  if (message.type === 'TOGGLE_CLIPPER') {
+    youtubeHandler.handleClipperToggle(message.enabled);
   }
 });

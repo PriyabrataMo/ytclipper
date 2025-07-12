@@ -22,17 +22,21 @@ export default defineConfig(({ mode }) => {
             type: 'asset',
             fileName: 'manifest.json',
             source: JSON.stringify(manifest, null, 2),
-          })
+          });
         },
       },
       viteStaticCopy({
         targets: [
           {
             src: '_locales',
-            dest: "",
-          }
-        ]
-      })
+            dest: '',
+          },
+          {
+            src: 'src/assets/*',
+            dest: 'assets',
+          },
+        ],
+      }),
     ],
     define: {
       __DEV__: !isProduction,
@@ -44,11 +48,10 @@ export default defineConfig(({ mode }) => {
         input: {
           background: path.resolve(__dirname, 'src/background/index.ts'),
           content: path.resolve(__dirname, 'src/content/index.ts'),
-          'content-ui': path.resolve(__dirname, 'src/content-ui/index.tsx'),
           popup: path.resolve(__dirname, 'src/popup/index.html'),
         },
         output: {
-          entryFileNames: chunk => {
+          entryFileNames: (chunk) => {
             const facadeModuleId = chunk.facadeModuleId;
 
             if (facadeModuleId?.includes('background')) {
@@ -57,14 +60,11 @@ export default defineConfig(({ mode }) => {
             if (facadeModuleId?.includes('content.')) {
               return 'src/content/index.js';
             }
-            if (facadeModuleId?.includes('content-ui')) {
-              return 'src/content-ui/index.js';
-            }
 
             return 'src/[name]/index.js';
           },
           chunkFileNames: 'chunks/[name].[hash].js',
-          assetFileNames: assetInfo => {
+          assetFileNames: (assetInfo) => {
             const name = assetInfo.name || '';
 
             if (name.endsWith('.css')) {

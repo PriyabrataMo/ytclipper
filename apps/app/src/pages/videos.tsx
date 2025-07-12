@@ -2,10 +2,10 @@ import { useAuth0 } from '@auth0/auth0-react';
 import { Button } from '@ytclipper/ui';
 import { Plus, Video } from 'lucide-react';
 
-import { VideoList } from '../components/video';
-import { PageLayout, Navigation } from '../components/layout';
-import { useVideos } from '../hooks/use-videos';
-import LoginButton from '../components/login-button';
+import { Navigation, PageLayout } from '@/components/layout';
+import LoginButton from '@/components/login-button';
+import { VideoList } from '@/components/video';
+import { useVideos } from '@/hooks/use-videos';
 
 export const VideosPage = () => {
   const { isAuthenticated } = useAuth0();
@@ -38,7 +38,7 @@ export const VideosPage = () => {
         <Navigation />
         <PageLayout>
           <div className='text-center py-16'>
-            <div className='animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4'></div>
+            <div className='animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4' />
             <p className='text-gray-600'>Loading your videos...</p>
           </div>
         </PageLayout>

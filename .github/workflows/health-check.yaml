@@ -26,6 +26,25 @@ jobs:
             echo "📦 Checking Docker services..."
             docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
 
+            # Check specific production containers
+            echo "🔍 Checking production containers..."
+            BACKEND_CONTAINER="ytclipper-production-backend"
+            FRONTEND_CONTAINER="ytclipper-production-app"
+
+            if [ "$(docker ps -q -f name=^${BACKEND_CONTAINER}$)" ]; then
+              echo "✅ Backend container ($BACKEND_CONTAINER) is running"
+            else
+              echo "❌ Backend container ($BACKEND_CONTAINER) is not running"
+              exit 1
+            fi
+
+            if [ "$(docker ps -q -f name=^${FRONTEND_CONTAINER}$)" ]; then
+              echo "✅ Frontend container ($FRONTEND_CONTAINER) is running"
+            else
+              echo "❌ Frontend container ($FRONTEND_CONTAINER) is not running"
+              exit 1
+            fi
+
             # 2. Backend health check
             echo "🔁 Checking backend health at http://localhost:8080/health"
             if curl --fail --silent --max-time 5 http://localhost:8080/health; then
@@ -53,6 +72,28 @@ jobs:
               exit 1
             fi
 
+            # 5. Check Docker port mappings
+            echo "🔌 Checking Docker port mappings..."
+            BACKEND_PORTS=$(docker port $BACKEND_CONTAINER 2>/dev/null || echo "none")
+            FRONTEND_PORTS=$(docker port $FRONTEND_CONTAINER 2>/dev/null || echo "none")
+
+            echo "Backend ports: $BACKEND_PORTS"
+            echo "Frontend ports: $FRONTEND_PORTS"
+
+            if echo "$BACKEND_PORTS" | grep -q "8080"; then
+              echo "✅ Backend port mapping is active"
+            else
+              echo "❌ Backend port mapping not found"
+              exit 1
+            fi
+
+            if echo "$FRONTEND_PORTS" | grep -q "3000"; then
+              echo "✅ Frontend port mapping is active"
+            else
+              echo "❌ Frontend port mapping not found"
+              exit 1
+            fi
+
             echo "🏁 All checks passed!"
 
       - name: ✅ Health Check Summary
@@ -62,6 +103,7 @@ jobs:
           echo "- Backend: 🟢 Healthy" >> $GITHUB_STEP_SUMMARY
           echo "- Database: 🟢 Healthy" >> $GITHUB_STEP_SUMMARY
           echo "- Frontend: 🟢 Healthy" >> $GITHUB_STEP_SUMMARY
+          echo "- Port mappings: 🟢 Active" >> $GITHUB_STEP_SUMMARY
           echo "- Last check: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
 
       - name: ❌ Alert on Failure
@@ -72,7 +114,8 @@ jobs:
           echo "- Failure time: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
           echo "### Troubleshooting Steps:" >> $GITHUB_STEP_SUMMARY
           echo "1. Check container status: \`docker ps -a\`" >> $GITHUB_STEP_SUMMARY
-          echo "2. View backend logs: \`docker logs ytclipper-backend\`" >> $GITHUB_STEP_SUMMARY
+          echo "2. View backend logs: \`docker logs ytclipper-production-backend\`" >> $GITHUB_STEP_SUMMARY
           echo "3. Check database connection: \`psql \$DATABASE_URL -c 'SELECT 1'\`" >> $GITHUB_STEP_SUMMARY
-          echo "4. View frontend logs: \`docker logs ytclipper-frontend\`" >> $GITHUB_STEP_SUMMARY
+          echo "4. View frontend logs: \`docker logs ytclipper-production-app\`" >> $GITHUB_STEP_SUMMARY
           echo "5. Check Nginx status: \`sudo systemctl status nginx\`" >> $GITHUB_STEP_SUMMARY
+          echo "6. Check port mappings: \`docker port ytclipper-production-backend && docker port ytclipper-production-app\`" >> $GITHUB_STEP_SUMMARY

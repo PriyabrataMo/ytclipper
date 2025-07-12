@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 
+import { type Video } from '@/types';
+
 import { mockData } from '../data';
-import type { Video } from '../types';
 
 /**
  * Custom hook for managing video data

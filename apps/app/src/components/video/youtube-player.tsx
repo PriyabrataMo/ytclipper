@@ -14,11 +14,11 @@ export const YouTubePlayer = ({ videoId, title }: YouTubePlayerProps) => {
 
   return (
     <div className='youtube-container'>
-      {isLoading && (
+      {isLoading ? (
         <div className='absolute inset-0 flex items-center justify-center bg-gray-100 rounded-lg'>
-          <div className='animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600'></div>
+          <div className='animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600' />
         </div>
-      )}
+      ) : null}
       <iframe
         src={`https://www.youtube.com/embed/${videoId}?enablejsapi=1&origin=${window.location.origin}`}
         title={title}

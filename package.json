@@ -2,6 +2,7 @@
   "name": "ytclipper",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@10.12.4",
   "workspaces": [
     "apps/*",
     "packages/*"
@@ -14,8 +15,10 @@
     "dev:extension:firefox": "pnpm --filter @ytclipper/extension dev:firefox",
     "build": "turbo run build",
     "build:extension": "pnpm --filter @ytclipper/extension build",
+    "build:app": "pnpm --filter app build",
     "build:ui": "pnpm --filter @ytclipper/ui build",
     "lint": "turbo run lint",
+    "lint:extension": "pnpm --filter @ytclipper/extension lint",
     "lint:fix": "turbo run lint:fix",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,css,scss,md,mdx}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,css,scss,md,mdx}\"",
