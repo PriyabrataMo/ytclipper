@@ -22,6 +22,8 @@ export interface Manifest {
     default_icon?: Record<string, string>;
   };
   icons?: Record<string, string>;
+  homepage_url?: string;
+  author?: string;
 }
 
 export const logger = {

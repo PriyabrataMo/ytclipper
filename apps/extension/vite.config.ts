@@ -31,6 +31,10 @@ export default defineConfig(({ mode }) => {
             src: '_locales',
             dest: '',
           },
+          {
+            src: 'src/assets/*',
+            dest: 'assets',
+          },
         ],
       }),
     ],
