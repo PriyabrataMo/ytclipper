@@ -79,6 +79,10 @@ func (a *Auth0Service) GenerateState() (string, error) {
 
 func (a *Auth0Service) LoginHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		fmt.Printf("🔐 LOGIN HANDLER CALLED - Starting Auth0 login flow\n")
+		fmt.Printf("🔐 Request URL: %s\n", c.Request.URL.String())
+		fmt.Printf("🔐 Request Headers: %+v\n", c.Request.Header)
+
 		state, err := a.GenerateState()
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to generate state")
@@ -86,84 +90,127 @@ func (a *Auth0Service) LoginHandler() gin.HandlerFunc {
 			return
 		}
 
+		fmt.Printf("🔐 Generated state: %s\n", state)
+
 		// Store state in session/cookie for validation
 		c.SetCookie("state", state, 300, "/", "", false, true) // 5 minutes
 
 		authURL := a.oauth.AuthCodeURL(state)
+		fmt.Printf("🔐 Redirecting to Auth0 URL: %s\n", authURL)
+
 		c.Redirect(http.StatusTemporaryRedirect, authURL)
 	}
 }
 
 func (a *Auth0Service) CallbackHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		fmt.Printf("🔄 CALLBACK HANDLER CALLED - Processing Auth0 callback\n")
+		fmt.Printf("🔄 Request URL: %s\n", c.Request.URL.String())
+		fmt.Printf("🔄 Query params: state=%s, code=%s, error=%s\n", c.Query("state"), c.Query("code"), c.Query("error"))
+
+		// Check for Auth0 errors first
+		if authError := c.Query("error"); authError != "" {
+			errorDesc := c.Query("error_description")
+			fmt.Printf("❌ Auth0 returned error: %s - %s\n", authError, errorDesc)
+			log.Error().Str("error", authError).Str("description", errorDesc).Msg("Auth0 authentication error")
+			middleware.RespondWithError(c, http.StatusBadRequest, "AUTH0_ERROR", fmt.Sprintf("Authentication failed: %s", errorDesc), nil)
+			return
+		}
+
 		// Verify state
 		storedState, err := c.Cookie("state")
 		if err != nil {
+			fmt.Printf("❌ Failed to get state from cookie: %v\n", err)
 			log.Error().Err(err).Msg("Failed to get state from cookie")
 			middleware.RespondWithError(c, http.StatusBadRequest, "INVALID_STATE", "Invalid state parameter", nil)
 			return
 		}
 
 		if c.Query("state") != storedState {
+			fmt.Printf("❌ State mismatch: received=%s, stored=%s\n", c.Query("state"), storedState)
 			log.Error().Msg("State parameter mismatch")
 			middleware.RespondWithError(c, http.StatusBadRequest, "INVALID_STATE", "State parameter mismatch", nil)
 			return
 		}
+
+		fmt.Printf("✅ State validation passed\n")
 
 		// Clear state cookie
 		c.SetCookie("state", "", -1, "/", "", false, true)
 
 		// Exchange code for token
 		code := c.Query("code")
+		fmt.Printf("🔄 Exchanging code for token: %s\n", code)
+
 		token, err := a.oauth.Exchange(context.Background(), code)
 		if err != nil {
+			fmt.Printf("❌ Failed to exchange code for token: %v\n", err)
 			log.Error().Err(err).Msg("Failed to exchange code for token")
 			middleware.RespondWithError(c, http.StatusInternalServerError, "TOKEN_EXCHANGE_ERROR", "Failed to exchange code for token", nil)
 			return
 		}
 
+		fmt.Printf("✅ Token exchange successful\n")
+
 		// Extract and verify ID token
 		rawIDToken, ok := token.Extra("id_token").(string)
 		if !ok {
+			fmt.Printf("❌ No id_token field in oauth2 token\n")
 			log.Error().Msg("No id_token field in oauth2 token")
 			middleware.RespondWithError(c, http.StatusInternalServerError, "NO_ID_TOKEN", "No id_token in response", nil)
 			return
 		}
 
+		fmt.Printf("✅ ID token extracted successfully\n")
+
 		idToken, err := a.verifier.Verify(context.Background(), rawIDToken)
 		if err != nil {
+			fmt.Printf("❌ Failed to verify ID token: %v\n", err)
 			log.Error().Err(err).Msg("Failed to verify ID token")
 			middleware.RespondWithError(c, http.StatusInternalServerError, "TOKEN_VERIFICATION_ERROR", "Failed to verify ID token", nil)
 			return
 		}
 
+		fmt.Printf("✅ ID token verification successful\n")
+
 		// Extract user info
 		var userInfo UserInfo
 		if err := idToken.Claims(&userInfo); err != nil {
+			fmt.Printf("❌ Failed to extract user info: %v\n", err)
 			log.Error().Err(err).Msg("Failed to extract user info")
 			middleware.RespondWithError(c, http.StatusInternalServerError, "USER_INFO_ERROR", "Failed to extract user info", nil)
 			return
 		}
 
+		fmt.Printf("✅ User info extracted - Email: %s, Sub: %s, Name: %s\n", userInfo.Email, userInfo.Sub, userInfo.Name)
+
 		// Create or update user in database
 		if a.db != nil {
+			fmt.Printf("🔄 About to create/update user in database...\n")
+
 			// Import the handlers package to use CreateOrUpdateUser
 			// We need to move this function to avoid circular import
 			dbUser, err := a.createOrUpdateUser(userInfo)
 			if err != nil {
+				fmt.Printf("❌ Failed to create/update user in database: %v\n", err)
 				log.Error().Err(err).Msg("Failed to create/update user in database")
 				middleware.RespondWithError(c, http.StatusInternalServerError, "DATABASE_ERROR", "Failed to save user", nil)
 				return
 			}
+
+			fmt.Printf("✅ User processed successfully - DB ID: %s, Email: %s\n", dbUser.ID.String(), dbUser.Email)
 
 			log.Info().
 				Str("user_id", userInfo.Sub).
 				Str("db_user_id", dbUser.ID.String()).
 				Bool("is_new_user", dbUser.CreatedAt.Equal(dbUser.UpdatedAt)).
 				Msg("User processed successfully")
+		} else {
+			fmt.Printf("⚠️  Database is nil, skipping user creation/update\n")
 		}
 
 		// Store tokens in secure cookies or return them
+		fmt.Printf("🔄 Setting authentication cookies...\n")
 		c.SetCookie("access_token", token.AccessToken, int(token.Expiry.Unix()), "/", "", true, true)
 		c.SetCookie("id_token", rawIDToken, int(token.Expiry.Unix()), "/", "", true, true)
 
@@ -174,6 +221,7 @@ func (a *Auth0Service) CallbackHandler() gin.HandlerFunc {
 
 		// Redirect to frontend or return user info
 		frontend_url := "http://localhost:5173" // Update this to your frontend URL
+		fmt.Printf("🔄 Redirecting to frontend: %s?auth=success\n", frontend_url)
 		c.Redirect(http.StatusTemporaryRedirect, frontend_url+"?auth=success")
 	}
 }
@@ -225,12 +273,31 @@ func (a *Auth0Service) GetUserInfo() gin.HandlerFunc {
 	}
 }
 
+// DebugHandler provides debug information about the authentication flow
+func (a *Auth0Service) DebugHandler() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		fmt.Printf("🐛 DEBUG HANDLER CALLED\n")
+		fmt.Printf("🐛 Request URL: %s\n", c.Request.URL.String())
+		fmt.Printf("🐛 Request Headers: %+v\n", c.Request.Header)
+		fmt.Printf("🐛 Cookies: %+v\n", c.Request.Cookies())
+		fmt.Printf("🐛 Query params: %+v\n", c.Request.URL.Query())
+
+		c.JSON(200, gin.H{
+			"message": "Debug route working",
+			"url":     c.Request.URL.String(),
+			"headers": c.Request.Header,
+			"cookies": c.Request.Cookies(),
+			"query":   c.Request.URL.Query(),
+		})
+	}
+}
+
 // createOrUpdateUser creates a new user or updates existing user in database
 func (a *Auth0Service) createOrUpdateUser(userInfo UserInfo) (*models.User, error) {
 	// Check if user already exists
 	var existingUser models.User
 	err := a.db.DB.Where("auth0_sub = ?", userInfo.Sub).First(&existingUser).Error
-
+	fmt.Printf("Checking for existing user with Auth0 ID: %s\n", userInfo.Sub)
 	if err == nil {
 		// User exists, update basic info
 		existingUser.Name = userInfo.Name
@@ -243,10 +310,7 @@ func (a *Auth0Service) createOrUpdateUser(userInfo UserInfo) (*models.User, erro
 			return nil, err
 		}
 
-		log.Info().
-			Str("user_id", userInfo.Sub).
-			Str("db_user_id", existingUser.ID.String()).
-			Msg("Updated existing user")
+		fmt.Printf("Updated existing user: %s (%s)\n", existingUser.Name, existingUser.Email)
 
 		return &existingUser, nil
 	}
@@ -282,11 +346,12 @@ func (a *Auth0Service) createOrUpdateUser(userInfo UserInfo) (*models.User, erro
 		return nil, err
 	}
 
-	log.Info().
-		Str("user_id", userInfo.Sub).
-		Str("db_user_id", newUser.ID.String()).
-		Str("email", newUser.Email).
-		Msg("Created new user successfully")
+	// log.Info().
+	// 	Str("user_id", userInfo.Sub).
+	// 	Str("db_user_id", newUser.ID.String()).
+	// 	Str("email", newUser.Email).
+	// 	Msg("Created new user successfully")
+	fmt.Printf("Created new user: %s (%s)\n", newUser.Name, newUser.Email)
 
 	return &newUser, nil
 }

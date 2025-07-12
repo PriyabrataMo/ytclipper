@@ -49,6 +49,7 @@ func SetupRouter(db *database.Database, cfg *config.Config) *gin.Engine {
 	r.GET("/login", auth0Service.LoginHandler())
 	r.GET("/callback", auth0Service.CallbackHandler())
 	r.GET("/logout", auth0Service.LogoutHandler())
+	r.GET("/debug", auth0Service.DebugHandler()) // Debug route for testing
 
 	// Root welcome page
 	r.GET("/", func(c *gin.Context) {
@@ -91,7 +92,7 @@ func SetupRouter(db *database.Database, cfg *config.Config) *gin.Engine {
 		authRoutes := v1.Group("/auth")
 		{
 			authRoutes.GET("/user", auth0Service.GetUserInfo())
-			authRoutes.GET("/logout", auth0Service.LogoutHandler())
+			// Removed duplicate logout route - it's already at root level: /logout
 
 			// Extension authentication endpoints
 			authRoutes.POST("/verify", auth.RequireAuth(&cfg.Auth0), handlers.VerifyToken)

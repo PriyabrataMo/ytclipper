@@ -32,11 +32,12 @@ func NewServer(cfg *config.Config) *Server {
 	}
 
 	// Set Gin mode based on environment
-	if cfg.Server.Env == "production" {
+	switch cfg.Server.Env {
+	case "production":
 		gin.SetMode(gin.ReleaseMode)
-	} else if cfg.Server.Env == "test" {
+	case "test":
 		gin.SetMode(gin.TestMode)
-	} else {
+	default:
 		gin.SetMode(gin.DebugMode)
 	}
 
