@@ -14,6 +14,7 @@
     "dev:extension:firefox": "pnpm --filter @ytclipper/extension dev:firefox",
     "build": "turbo run build",
     "build:extension": "pnpm --filter @ytclipper/extension build",
+    "build:app": "pnpm --filter app build",
     "build:ui": "pnpm --filter @ytclipper/ui build",
     "lint": "turbo run lint",
     "lint:extension": "pnpm --filter @ytclipper/extension lint",
