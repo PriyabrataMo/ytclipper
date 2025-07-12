@@ -1,5 +1,7 @@
-import { useState, useEffect } from 'react';
-import { Video } from '../types';
+import { useEffect, useState } from 'react';
+
+import { type Video } from '@/types';
+
 import { mockData } from '../data';
 
 /**

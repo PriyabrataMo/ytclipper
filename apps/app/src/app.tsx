@@ -11,16 +11,14 @@ import {
   HomePage,
   LoginPage,
   ProfilePage,
-  VideosPage,
   VideoDetailPage,
+  VideosPage,
 } from '@/pages';
 
 const App = () => {
-  const { isLoading, isAuthenticated, getAccessTokenSilently, user, logout } =
+  const { isLoading, isAuthenticated, getAccessTokenSilently, user } =
     useAuth0();
 
-  // Enable communication with extension
-  // useAuthMessageListener();
   useEffect(() => {
     const syncTokenWithExtension = async () => {
       if (isAuthenticated) {

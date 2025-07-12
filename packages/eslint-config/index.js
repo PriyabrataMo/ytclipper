@@ -121,7 +121,6 @@ export default tseslint.config([
       'no-else-return': 'error',
       'no-lonely-if': 'error',
       'no-unneeded-ternary': 'error',
-      'no-nested-ternary': 'error',
       yoda: ['error', 'never'],
 
       // STRING AND TEMPLATE RULES - LOGIC ONLY (FORMATTING HANDLED BY PRETTIER)

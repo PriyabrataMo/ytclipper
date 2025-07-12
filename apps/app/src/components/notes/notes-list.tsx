@@ -1,5 +1,6 @@
+import { type Note } from '@/types';
+
 import { NoteCard } from './note-card';
-import { Note } from '../../types';
 
 interface NotesListProps {
   notes: Note[];

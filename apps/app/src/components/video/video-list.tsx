@@ -1,5 +1,6 @@
+import { type Video } from '@/types';
+
 import { VideoCard } from './video-card';
-import { Video } from '../../types';
 
 interface VideoListProps {
   videos: Video[];
