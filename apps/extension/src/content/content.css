@@ -1,30 +1,25 @@
-/* Base button styles */
 #yt-clipper-button.ytp-button {
   background-color: #ff6b35 !important;
   border-radius: 4px !important;
   margin: 0 4px !important;
 }
 
-/* Hover effects */
 #yt-clipper-button.ytp-button:hover {
   background-color: #e05a2a !important;
   transform: translateY(-1px);
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
-/* Active state */
 #yt-clipper-button.ytp-button:active {
   transform: translateY(1px);
   box-shadow: none;
 }
 
-/* Icon sizing */
 #yt-clipper-button.ytp-button svg {
   width: 20px;
   height: 20px;
 }
 
-/* Small player adjustments */
 .ytp-small-mode #yt-clipper-button.ytp-button {
   padding: 3px !important;
 }
@@ -32,4 +27,215 @@
 .ytp-small-mode #yt-clipper-button.ytp-button svg {
   width: 16px;
   height: 16px;
+}
+
+.yt-clipper-note-panel {
+  position: fixed;
+  top: 0;
+  right: -400px;
+  width: 400px;
+  height: 100vh;
+  background: linear-gradient(180deg, #1a1a1a 0%, #0f0f0f 100%);
+  border-left: 1px solid #333;
+  transition: right 0.3s ease;
+  z-index: 5000;
+  display: flex;
+  flex-direction: column;
+  box-shadow: -5px 0 20px rgba(0, 0, 0, 0.5);
+}
+
+.yt-clipper-note-panel.open {
+  right: 0;
+}
+
+.yt-clipper-panel-header {
+  padding: 20px;
+  border-bottom: 1px solid #333;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.yt-clipper-panel-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #ff6b35;
+  display: flex;
+  align-items: center;
+}
+
+.yt-clipper-panel-title svg {
+  width: 20px;
+  height: 20px;
+  margin-right: 8px;
+}
+
+.yt-clipper-close-btn {
+  background: none;
+  border: none;
+  color: #999;
+  cursor: pointer;
+  font-size: 24px;
+  padding: 5px;
+  border-radius: 4px;
+  transition: color 0.2s ease;
+}
+
+.yt-clipper-close-btn:hover {
+  color: white;
+}
+
+.yt-clipper-timestamp-info {
+  padding: 0 20px 15px;
+  color: #999;
+  font-size: 14px;
+}
+
+.yt-clipper-note-form {
+  padding: 0 20px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.yt-clipper-form-group {
+  margin-bottom: 20px;
+}
+
+.yt-clipper-form-label {
+  display: block;
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: #ccc;
+}
+
+.yt-clipper-form-input {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #333;
+  border-radius: 6px;
+  background: #2a2a2a;
+  color: white;
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.yt-clipper-form-input:focus {
+  border-color: #ff6b35;
+  box-shadow: 0 0 0 2px rgba(255, 107, 53, 0.2);
+}
+
+.yt-clipper-form-textarea {
+  resize: vertical;
+  min-height: 120px;
+  font-family: inherit;
+}
+
+.yt-clipper-tags-input {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.yt-clipper-tag {
+  background: #ff6b35;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+}
+
+.yt-clipper-tag-remove {
+  margin-left: 4px;
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+.yt-clipper-tag-remove:hover {
+  opacity: 1;
+}
+
+.yt-clipper-action-buttons {
+  padding: 20px;
+  border-top: 1px solid #333;
+  display: flex;
+  gap: 12px;
+}
+
+.yt-clipper-btn {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  flex: 1;
+}
+
+.yt-clipper-btn-primary {
+  background: #ff6b35;
+  color: white;
+}
+
+.yt-clipper-btn-primary:hover {
+  background: #e05a2a;
+  transform: translateY(-1px);
+}
+
+.yt-clipper-btn-secondary {
+  background: #333;
+  color: white;
+}
+
+.yt-clipper-btn-secondary:hover {
+  background: #444;
+}
+
+.yt-clipper-quick-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 15px;
+}
+
+.yt-clipper-quick-action {
+  padding: 6px 12px;
+  background: #333;
+  border: 1px solid #444;
+  border-radius: 4px;
+  color: #ccc;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.yt-clipper-quick-action:hover {
+  background: #444;
+  color: white;
+}
+
+.html5-video-player.yt-clipper-panel-open {
+  margin-right: 400px;
+  transition: margin-right 0.3s ease;
+}
+
+#yt-clipper-button {
+  /* Your existing button styles */
+}
+
+/* Responsive styles */
+@media (max-width: 768px) {
+  .yt-clipper-note-panel {
+    width: 100%;
+    right: -100%;
+  }
+
+  .html5-video-player.yt-clipper-panel-open {
+    margin-right: 100%;
+  }
 }
