@@ -40,8 +40,16 @@ FROM nginx:alpine
 # Copy built app from builder stage
 COPY --from=builder /app/apps/app/dist /usr/share/nginx/html
 
-# Copy custom nginx configuration
-COPY --from=builder /app/apps/app/nginx.conf /etc/nginx/nginx.conf
+# Copy template nginx configuration
+COPY --from=builder /app/apps/app/nginx.conf /etc/nginx/nginx.conf.template
 
-EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
+# Create startup script
+RUN echo '#!/bin/sh' > /docker-entrypoint.sh && \
+    echo 'PORT=${PORT:-3000}' >> /docker-entrypoint.sh && \
+    echo 'sed "s/listen 80;/listen $PORT;/g" /etc/nginx/nginx.conf.template > /etc/nginx/nginx.conf' >> /docker-entrypoint.sh && \
+    echo 'exec nginx -g "daemon off;"' >> /docker-entrypoint.sh && \
+    chmod +x /docker-entrypoint.sh
+
+ENV PORT=3000
+
+CMD ["/docker-entrypoint.sh"]
