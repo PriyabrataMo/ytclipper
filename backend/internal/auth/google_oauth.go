@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
-	"net/url"
 
 	"github.com/gin-gonic/gin"
 	"github.com/rs/zerolog/log"
@@ -173,7 +172,7 @@ func (g *GoogleOAuthService) CallbackHandler() gin.HandlerFunc {
 			Msg("User authenticated successfully via Google OAuth")
 
 		// Redirect to frontend
-		frontendURL := g.getFrontendURL(c)
+		frontendURL := g.getFrontendURL()
 		c.Redirect(http.StatusTemporaryRedirect, frontendURL+"/auth/callback?auth=success")
 	}
 }
@@ -265,25 +264,15 @@ func (g *GoogleOAuthService) setAuthCookies(c *gin.Context, tokenPair *TokenPair
 	c.SetCookie("refresh_token", tokenPair.RefreshToken, int(7*24*60*60), "/", g.authConfig.CookieDomain, g.authConfig.CookieSecure, g.authConfig.CookieHTTPOnly)
 }
 
-func (g *GoogleOAuthService) getFrontendURL(c *gin.Context) string {
-	origin := c.GetHeader("Origin")
-	if origin == "" {
-		origin = c.GetHeader("Referer")
-		if origin != "" {
-			if u, err := url.Parse(origin); err == nil {
-				origin = u.Scheme + "://" + u.Host
-			}
-		}
+func (g *GoogleOAuthService) getFrontendURL() string {
+	var origin string
+
+	if g.server.Env == "development" {
+		origin = "http://localhost:5173"
 	}
 
-	if origin == "" {
-		if g.server.Env == "development" {
-			origin = "http://localhost:5173"
-		}
-
-		if g.server.Env == "production" {
-			origin = "https://app.ytclipper.com"
-		}
+	if g.server.Env == "production" {
+		origin = "https://app.ytclipper.com"
 	}
 
 	log.Info().Str("origin", origin).Msg("Redirecting to frontend URL")
