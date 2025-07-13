@@ -1,5 +1,4 @@
-import type { PayloadAction } from '@reduxjs/toolkit';
-import { createSlice } from '@reduxjs/toolkit';
+import { createSlice, type PayloadAction } from '@reduxjs/toolkit';
 
 export interface Notification {
   id: string;
@@ -50,10 +49,10 @@ const uiSlice = createSlice({
     },
     removeNotification: (state, action: PayloadAction<string>) => {
       state.notifications = state.notifications.filter(
-        n => n.id !== action.payload,
+        (n) => n.id !== action.payload,
       );
     },
-    clearNotifications: state => {
+    clearNotifications: (state) => {
       state.notifications = [];
     },
     openModal: (state, action: PayloadAction<keyof UIState['modals']>) => {
@@ -68,7 +67,7 @@ const uiSlice = createSlice({
     setSidebarOpen: (state, action: PayloadAction<boolean>) => {
       state.sidebarOpen = action.payload;
     },
-    toggleSidebar: state => {
+    toggleSidebar: (state) => {
       state.sidebarOpen = !state.sidebarOpen;
     },
   },

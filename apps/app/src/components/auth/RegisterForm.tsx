@@ -60,17 +60,17 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onToggleForm }) => {
     <div className='max-w-md mx-auto mt-8 p-6 bg-white rounded-lg shadow-md'>
       <h2 className='text-2xl font-bold text-center mb-6'>Create Account</h2>
 
-      {error && (
+      {error ? (
         <div className='mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded'>
           {error}
         </div>
-      )}
+      ) : null}
 
-      {success && (
+      {success ? (
         <div className='mb-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded'>
           {success}
         </div>
-      )}
+      ) : null}
 
       <form onSubmit={handleSubmit} className='space-y-4'>
         <div>
@@ -84,7 +84,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onToggleForm }) => {
             id='name'
             type='text'
             value={name}
-            onChange={e => setName(e.target.value)}
+            onChange={(e) => setName(e.target.value)}
             required
             className='mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500'
             placeholder='Enter your full name'
@@ -102,7 +102,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onToggleForm }) => {
             id='email'
             type='email'
             value={email}
-            onChange={e => setEmail(e.target.value)}
+            onChange={(e) => setEmail(e.target.value)}
             required
             className='mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500'
             placeholder='Enter your email'
@@ -120,7 +120,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onToggleForm }) => {
             id='password'
             type='password'
             value={password}
-            onChange={e => setPassword(e.target.value)}
+            onChange={(e) => setPassword(e.target.value)}
             required
             className='mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500'
             placeholder='Enter your password (min 8 characters)'
@@ -138,7 +138,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onToggleForm }) => {
             id='confirmPassword'
             type='password'
             value={confirmPassword}
-            onChange={e => setConfirmPassword(e.target.value)}
+            onChange={(e) => setConfirmPassword(e.target.value)}
             required
             className='mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500'
             placeholder='Confirm your password'

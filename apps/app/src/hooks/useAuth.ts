@@ -27,7 +27,7 @@ export function useAuth() {
     isLoading: authLoading,
     error: authError,
     isInitialized,
-  } = useAppSelector(state => state.auth);
+  } = useAppSelector((state) => state.auth);
 
   useEffect(() => {
     if (!isInitialized) {
@@ -239,7 +239,7 @@ export function useAuth() {
   });
 
   return {
-    user: user,
+    user,
     isAuthenticated,
     isLoading,
     error: authError,

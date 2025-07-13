@@ -1,7 +1,6 @@
 import React, { useEffect } from 'react';
-import { useAppDispatch, useAppSelector } from '../store/hooks';
-import type { Notification } from '../store/slices/uiSlice';
-import { removeNotification } from '../store/slices/uiSlice';
+import { useAppDispatch, useAppSelector } from '@/store/hooks';
+import { removeNotification, type Notification } from '@/store/slices/uiSlice';
 
 interface NotificationItemProps {
   notification: Notification;
@@ -124,11 +123,11 @@ const NotificationItem: React.FC<NotificationItemProps> = ({
           <p className={`text-sm font-medium ${getTextColor()}`}>
             {notification.title}
           </p>
-          {notification.message && (
+          {notification.message ? (
             <p className={`mt-1 text-sm ${getTextColor()} opacity-90`}>
               {notification.message}
             </p>
-          )}
+          ) : null}
         </div>
         <div className='ml-4 flex-shrink-0 flex'>
           <button
@@ -152,7 +151,7 @@ const NotificationItem: React.FC<NotificationItemProps> = ({
 
 export const NotificationSystem: React.FC = () => {
   const dispatch = useAppDispatch();
-  const notifications = useAppSelector(state => state.ui.notifications);
+  const notifications = useAppSelector((state) => state.ui.notifications);
 
   const handleRemove = (id: string) => {
     dispatch(removeNotification(id));
@@ -164,7 +163,7 @@ export const NotificationSystem: React.FC = () => {
 
   return (
     <div className='fixed top-4 right-4 z-50 space-y-2'>
-      {notifications.map(notification => (
+      {notifications.map((notification) => (
         <NotificationItem
           key={notification.id}
           notification={notification}

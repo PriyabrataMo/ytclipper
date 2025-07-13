@@ -43,8 +43,12 @@ export const AddPasswordForm: React.FC<AddPasswordFormProps> = ({
       if (onSuccess) {
         setTimeout(() => onSuccess(), 1500);
       }
-    } catch (err: any) {
-      setError(err.message || 'Failed to add password');
+    } catch (err) {
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('Failed to add password. Please try again later.');
+      }
     } finally {
       setLoading(false);
     }
@@ -61,17 +65,17 @@ export const AddPasswordForm: React.FC<AddPasswordFormProps> = ({
         in addition to Google.
       </p>
 
-      {error && (
+      {error ? (
         <div className='mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded'>
           {error}
         </div>
-      )}
+      ) : null}
 
-      {success && (
+      {success ? (
         <div className='mb-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded'>
           {success}
         </div>
-      )}
+      ) : null}
 
       <form onSubmit={handleSubmit} className='space-y-4'>
         <div>
@@ -85,7 +89,7 @@ export const AddPasswordForm: React.FC<AddPasswordFormProps> = ({
             id='password'
             type='password'
             value={password}
-            onChange={e => setPassword(e.target.value)}
+            onChange={(e) => setPassword(e.target.value)}
             required
             minLength={8}
             className='w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
@@ -104,7 +108,7 @@ export const AddPasswordForm: React.FC<AddPasswordFormProps> = ({
             id='confirmPassword'
             type='password'
             value={confirmPassword}
-            onChange={e => setConfirmPassword(e.target.value)}
+            onChange={(e) => setConfirmPassword(e.target.value)}
             required
             minLength={8}
             className='w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
@@ -121,7 +125,7 @@ export const AddPasswordForm: React.FC<AddPasswordFormProps> = ({
             {loading ? 'Adding Password...' : 'Add Password'}
           </button>
 
-          {onCancel && (
+          {onCancel ? (
             <button
               type='button'
               onClick={onCancel}
@@ -129,7 +133,7 @@ export const AddPasswordForm: React.FC<AddPasswordFormProps> = ({
             >
               Cancel
             </button>
-          )}
+          ) : null}
         </div>
       </form>
     </div>

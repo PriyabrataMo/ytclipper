@@ -41,11 +41,11 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onToggleForm }) => {
     <div className='max-w-md mx-auto mt-8 p-6 bg-white rounded-lg shadow-md'>
       <h2 className='text-2xl font-bold text-center mb-6'>Sign In</h2>
 
-      {error && (
+      {error ? (
         <div className='mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded'>
           {error}
         </div>
-      )}
+      ) : null}
 
       <form onSubmit={handleSubmit} className='space-y-4'>
         <div>
@@ -59,7 +59,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onToggleForm }) => {
             id='email'
             type='email'
             value={email}
-            onChange={e => setEmail(e.target.value)}
+            onChange={(e) => setEmail(e.target.value)}
             required
             className='mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500'
             placeholder='Enter your email'
@@ -77,7 +77,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onToggleForm }) => {
             id='password'
             type='password'
             value={password}
-            onChange={e => setPassword(e.target.value)}
+            onChange={(e) => setPassword(e.target.value)}
             required
             className='mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500'
             placeholder='Enter your password'
@@ -134,7 +134,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onToggleForm }) => {
 
       <div className='mt-6 text-center'>
         <p className='text-sm text-gray-600'>
-          Don't have an account?{' '}
+          Dont have an account?{' '}
           <button
             onClick={onToggleForm}
             className='font-medium text-blue-600 hover:text-blue-500'

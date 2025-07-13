@@ -67,7 +67,7 @@ export const ProfilePage = () => {
                 </h2>
 
                 <div className='space-y-4'>
-                  {user.picture && (
+                  {user.picture ? (
                     <div className='flex justify-center lg:justify-start'>
                       <img
                         src={user.picture}
@@ -75,27 +75,27 @@ export const ProfilePage = () => {
                         className='w-20 h-20 rounded-full border-2 border-gray-200'
                       />
                     </div>
-                  )}
+                  ) : null}
 
                   <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
                     <div>
-                      <label className='block text-sm font-medium text-gray-700'>
+                      <span className='block text-sm font-medium text-gray-700'>
                         Name
-                      </label>
+                      </span>
                       <p className='mt-1 text-sm text-gray-900'>{user.name}</p>
                     </div>
 
                     <div>
-                      <label className='block text-sm font-medium text-gray-700'>
+                      <span className='block text-sm font-medium text-gray-700'>
                         Email
-                      </label>
+                      </span>
                       <p className='mt-1 text-sm text-gray-900'>{user.email}</p>
                     </div>
 
                     <div>
-                      <label className='block text-sm font-medium text-gray-700'>
+                      <span className='block text-sm font-medium text-gray-700'>
                         Email Verified
-                      </label>
+                      </span>
                       <p className='mt-1 text-sm'>
                         <span
                           className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
@@ -110,18 +110,18 @@ export const ProfilePage = () => {
                     </div>
 
                     <div>
-                      <label className='block text-sm font-medium text-gray-700'>
+                      <span className='block text-sm font-medium text-gray-700'>
                         Primary Provider
-                      </label>
+                      </span>
                       <p className='mt-1 text-sm text-gray-900 capitalize'>
                         {user.primary_provider}
                       </p>
                     </div>
 
                     <div>
-                      <label className='block text-sm font-medium text-gray-700'>
+                      <span className='block text-sm font-medium text-gray-700'>
                         Member Since
-                      </label>
+                      </span>
                       <p className='mt-1 text-sm text-gray-900'>
                         {new Date(user.created_at).toLocaleDateString()}
                       </p>
@@ -208,7 +208,7 @@ export const ProfilePage = () => {
           </div>
 
           {/* Add Password Modal */}
-          {showAddPassword && (
+          {showAddPassword ? (
             <div className='fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50'>
               <div className='bg-white rounded-lg max-w-md w-full'>
                 <AddPasswordForm
@@ -217,7 +217,7 @@ export const ProfilePage = () => {
                 />
               </div>
             </div>
-          )}
+          ) : null}
         </div>
       </div>
     </>

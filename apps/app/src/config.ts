@@ -1,6 +1,7 @@
 type Environment = 'development' | 'staging' | 'production';
 
-const ENV = (import.meta.env.VITE_ENVIRONMENT as Environment) || 'production';
+export const ENV =
+  (import.meta.env.VITE_ENVIRONMENT as Environment) || 'production';
 
 const config = {
   development: {

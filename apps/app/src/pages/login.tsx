@@ -44,7 +44,7 @@ export const LoginPage = () => {
       });
     } else {
       if (formData.password !== formData.confirmPassword) {
-        alert('Passwords do not match');
+        console.log('Passwords do not match');
         return;
       }
       register({

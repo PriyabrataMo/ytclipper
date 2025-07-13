@@ -8,9 +8,14 @@ import { useVideo } from '../hooks/use-videos';
 import { useAuth } from '../hooks/useAuth';
 
 export const VideoDetailPage = () => {
-  const { id } = useParams<{ id: string }>();
+  const { id } = useParams<{ id?: string }>();
   const { isAuthenticated } = useAuth();
-  const { video, loading, error } = useVideo(id!);
+
+  const { video, loading, error } = useVideo(id);
+
+  if (!id) {
+    return <div>Video id is missing</div>;
+  }
 
   if (!isAuthenticated) {
     return (
@@ -39,7 +44,7 @@ export const VideoDetailPage = () => {
           description='Please wait while we load the video details.'
         >
           <div className='flex items-center justify-center py-12'>
-            <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600'></div>
+            <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600' />
           </div>
         </PageLayout>
       </div>
@@ -56,7 +61,7 @@ export const VideoDetailPage = () => {
         >
           <div className='text-center'>
             <p className='text-gray-600'>
-              Sorry, we couldn't find the video you're looking for.
+              Sorry, we couldn&apos;t find the video you&apos;re looking for.
             </p>
           </div>
         </PageLayout>
@@ -76,11 +81,11 @@ export const VideoDetailPage = () => {
                 {video.title}
               </h2>
               <p className='text-gray-600 mb-4'>By {video.channelName}</p>
-              {video.description && (
+              {video.description ? (
                 <p className='text-gray-700 leading-relaxed'>
                   {video.description}
                 </p>
-              )}
+              ) : null}
             </div>
           </div>
           <div className='lg:col-span-1'>
