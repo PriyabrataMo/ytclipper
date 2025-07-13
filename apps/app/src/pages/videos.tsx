@@ -1,84 +1,56 @@
-import { useAuth0 } from '@auth0/auth0-react';
-import { Button } from '@ytclipper/ui';
-import { Plus, Video } from 'lucide-react';
-
-import { Navigation, PageLayout } from '@/components/layout';
-import LoginButton from '@/components/login-button';
-import { VideoList } from '@/components/video';
-import { useVideos } from '@/hooks/use-videos';
+import { Navigation } from '../components/layout/navigation';
+import { PageLayout } from '../components/layout/page-layout';
+import { VideoList } from '../components/video/video-list';
+import { useVideos } from '../hooks/use-videos';
+import { useAuth } from '../hooks/useAuth';
 
 export const VideosPage = () => {
-  const { isAuthenticated } = useAuth0();
-  const { videos, loading, error } = useVideos();
+  const { isAuthenticated } = useAuth();
+  const { videos, loading } = useVideos();
 
   if (!isAuthenticated) {
     return (
-      <>
-        <Navigation />
-        <PageLayout>
-          <div className='text-center py-16'>
-            <Video className='w-16 h-16 text-gray-400 mx-auto mb-4' />
-            <h2 className='text-2xl font-bold text-gray-900 mb-2'>
-              Welcome to YT Clipper
-            </h2>
-            <p className='text-gray-600 mb-8 max-w-md mx-auto'>
-              Create and manage timestamped notes from your favorite YouTube
-              videos. Sign in to access your video library.
+      <div className='min-h-screen bg-gray-50'>
+        <Navigation title='Videos' showBackButton />
+        <PageLayout
+          title='Access Denied'
+          description='Please log in to view your videos.'
+        >
+          <div className='text-center'>
+            <p className='text-gray-600'>
+              You need to be logged in to access this page.
             </p>
-            <LoginButton />
           </div>
         </PageLayout>
-      </>
+      </div>
     );
   }
 
   if (loading) {
     return (
-      <>
-        <Navigation />
-        <PageLayout>
-          <div className='text-center py-16'>
-            <div className='animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4' />
-            <p className='text-gray-600'>Loading your videos...</p>
+      <div className='min-h-screen bg-gray-50'>
+        <Navigation title='Videos' showBackButton />
+        <PageLayout
+          title='Your Videos'
+          description='Manage and view your saved videos'
+        >
+          <div className='flex items-center justify-center py-12'>
+            <div className='animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600' />
           </div>
         </PageLayout>
-      </>
-    );
-  }
-
-  if (error) {
-    return (
-      <>
-        <Navigation />
-        <PageLayout>
-          <div className='text-center py-16'>
-            <p className='text-red-600 mb-4'>{error}</p>
-            <Button onClick={() => window.location.reload()}>Try Again</Button>
-          </div>
-        </PageLayout>
-      </>
+      </div>
     );
   }
 
   return (
-    <>
-      <Navigation />
+    <div className='min-h-screen bg-gray-50'>
+      <Navigation title='Videos' showBackButton />
       <PageLayout
-        title='Your Video Library'
-        description='Manage your clipped YouTube videos and timestamped notes all in one place.'
+        title='Your Videos'
+        description='Manage and view your saved videos'
       >
-        <div className='flex justify-between items-center mb-6'>
-          <div className='flex items-center space-x-2 text-gray-600'>
-            <Video className='w-5 h-5' />
-            <span>{videos.length} videos</span>
-          </div>
-          <Button className='flex items-center space-x-2'>
-            <Plus className='w-4 h-4' />
-            <span>Add New Video</span>
-          </Button>
-        </div>
         <VideoList videos={videos} />
       </PageLayout>
-    </>
+    </div>
   );
 };

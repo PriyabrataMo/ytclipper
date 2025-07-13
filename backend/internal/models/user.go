@@ -3,16 +3,17 @@ package models
 import (
 	"time"
 
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
 // User represents a user in the system
 type User struct {
-	ID       uint   `gorm:"primaryKey" json:"id"`
-	Email    string `gorm:"unique;not null" json:"email"`
-	Name     string `json:"name"`
-	Picture  string `json:"picture"`
-	GoogleID string `gorm:"unique" json:"google_id,omitempty"`
+	ID       uuid.UUID `gorm:"type:uuid;primary_key;" json:"id"`
+	Email    string    `gorm:"unique;not null" json:"email"`
+	Name     string    `json:"name"`
+	Picture  string    `json:"picture"`
+	GoogleID string    `gorm:"unique" json:"google_id,omitempty"`
 	// Email/password authentication fields
 	Password                string     `json:"-"` // Never include in JSON responses
 	EmailVerified           bool       `gorm:"default:false" json:"email_verified"`
@@ -31,8 +32,8 @@ type User struct {
 
 // RefreshToken represents a refresh token for JWT authentication
 type RefreshToken struct {
-	ID        uint           `gorm:"primaryKey" json:"id"`
-	UserID    uint           `gorm:"not null" json:"user_id"`
+	ID        uuid.UUID      `gorm:"type:uuid;primary_key;" json:"id"`
+	UserID    uuid.UUID      `gorm:"type:uuid;not null" json:"user_id"`
 	Token     string         `gorm:"unique;not null" json:"token"`
 	ExpiresAt time.Time      `gorm:"not null" json:"expires_at"`
 	CreatedAt time.Time      `json:"created_at"`
@@ -42,8 +43,8 @@ type RefreshToken struct {
 
 // UserSession represents an active user session
 type UserSession struct {
-	ID        string    `json:"id" gorm:"primaryKey;type:varchar(255)"`
-	UserID    string    `json:"user_id" gorm:"not null;index"`
+	ID        uuid.UUID `gorm:"type:uuid;primary_key;" json:"id"`
+	UserID    uuid.UUID `gorm:"type:uuid;not null;index" json:"user_id"`
 	UserAgent string    `json:"user_agent"`
 	IPAddress string    `json:"ip_address"`
 	CreatedAt time.Time `json:"created_at"`
@@ -70,4 +71,24 @@ func (UserSession) TableName() string {
 	return "user_sessions"
 }
 
-// BeforeCreate hook is no longer needed since we're using auto-incrementing uint ID
+// BeforeCreate hooks for UUID generation
+func (u *User) BeforeCreate(tx *gorm.DB) error {
+	if u.ID == uuid.Nil {
+		u.ID = uuid.New()
+	}
+	return nil
+}
+
+func (rt *RefreshToken) BeforeCreate(tx *gorm.DB) error {
+	if rt.ID == uuid.Nil {
+		rt.ID = uuid.New()
+	}
+	return nil
+}
+
+func (us *UserSession) BeforeCreate(tx *gorm.DB) error {
+	if us.ID == uuid.Nil {
+		us.ID = uuid.New()
+	}
+	return nil
+}

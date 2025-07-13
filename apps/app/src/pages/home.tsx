@@ -1,4 +1,3 @@
-import { useAuth0 } from '@auth0/auth0-react';
 import {
   Button,
   Card,
@@ -9,10 +8,10 @@ import {
 import { Bookmark, Clock, Play, Share2 } from 'lucide-react';
 import { Link } from 'react-router';
 
-import LoginButton from '../components/login-button';
+import { useAuth } from '../hooks/useAuth';
 
 export const HomePage = () => {
-  const { isAuthenticated } = useAuth0();
+  const { isAuthenticated } = useAuth();
 
   return (
     <div className='min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100'>
@@ -52,7 +51,13 @@ export const HomePage = () => {
                   Sign in to start creating timestamped notes for your favorite
                   YouTube videos.
                 </p>
-                <LoginButton />
+                <Button
+                  asChild
+                  size='lg'
+                  className='w-full bg-blue-600 hover:bg-blue-700 text-white'
+                >
+                  <Link to='/auth'>Sign In / Register</Link>
+                </Button>
               </CardContent>
             </Card>
           </div>

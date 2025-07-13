@@ -1,5 +1,5 @@
+import { useAuth } from '@/hooks/useAuth';
 import React, { useState } from 'react';
-import { authService } from '../../services/auth';
 
 interface RegisterFormProps {
   onToggleForm: () => void;
@@ -10,73 +10,67 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onToggleForm }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [localError, setLocalError] = useState('');
   const [success, setSuccess] = useState('');
+
+  const {
+    register,
+    loginWithGoogle,
+    isRegistering,
+    error: authError,
+  } = useAuth();
+
+  const error = localError || authError;
+  const loading = isRegistering;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    setError('');
+    setLocalError('');
     setSuccess('');
 
+    if (!name || !email || !password || !confirmPassword) {
+      setLocalError('Please fill in all fields');
+      return;
+    }
+
     if (password !== confirmPassword) {
-      setError('Passwords do not match');
-      setLoading(false);
+      setLocalError('Passwords do not match');
       return;
     }
 
     if (password.length < 8) {
-      setError('Password must be at least 8 characters long');
-      setLoading(false);
+      setLocalError('Password must be at least 8 characters long');
       return;
     }
 
-    try {
-      await authService.register(name, email, password);
-      setSuccess(
-        'Account created successfully! Please check your email to verify your account.',
-      );
-      // Clear form
-      setName('');
-      setEmail('');
-      setPassword('');
-      setConfirmPassword('');
-    } catch (err: any) {
-      setError(err.message || 'Registration failed');
-    } finally {
-      setLoading(false);
-    }
+    register({ name, email, password });
+
+    setName('');
+    setEmail('');
+    setPassword('');
+    setConfirmPassword('');
   };
 
   const handleGoogleLogin = async () => {
-    setLoading(true);
-    setError('');
-
-    try {
-      await authService.loginWithGoogle();
-    } catch (err: any) {
-      setError(err.message || 'Google login failed');
-    } finally {
-      setLoading(false);
-    }
+    setLocalError('');
+    loginWithGoogle();
   };
 
   return (
     <div className='max-w-md mx-auto mt-8 p-6 bg-white rounded-lg shadow-md'>
       <h2 className='text-2xl font-bold text-center mb-6'>Create Account</h2>
 
-      {error && (
+      {error ? (
         <div className='mb-4 p-3 bg-red-100 border border-red-400 text-red-700 rounded'>
           {error}
         </div>
-      )}
+      ) : null}
 
-      {success && (
+      {success ? (
         <div className='mb-4 p-3 bg-green-100 border border-green-400 text-green-700 rounded'>
           {success}
         </div>
-      )}
+      ) : null}
 
       <form onSubmit={handleSubmit} className='space-y-4'>
         <div>
@@ -90,7 +84,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onToggleForm }) => {
             id='name'
             type='text'
             value={name}
-            onChange={e => setName(e.target.value)}
+            onChange={(e) => setName(e.target.value)}
             required
             className='mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500'
             placeholder='Enter your full name'
@@ -108,7 +102,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onToggleForm }) => {
             id='email'
             type='email'
             value={email}
-            onChange={e => setEmail(e.target.value)}
+            onChange={(e) => setEmail(e.target.value)}
             required
             className='mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500'
             placeholder='Enter your email'
@@ -126,7 +120,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onToggleForm }) => {
             id='password'
             type='password'
             value={password}
-            onChange={e => setPassword(e.target.value)}
+            onChange={(e) => setPassword(e.target.value)}
             required
             className='mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500'
             placeholder='Enter your password (min 8 characters)'
@@ -144,7 +138,7 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onToggleForm }) => {
             id='confirmPassword'
             type='password'
             value={confirmPassword}
-            onChange={e => setConfirmPassword(e.target.value)}
+            onChange={(e) => setConfirmPassword(e.target.value)}
             required
             className='mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500'
             placeholder='Confirm your password'

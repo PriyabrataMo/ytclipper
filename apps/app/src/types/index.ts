@@ -1,3 +1,17 @@
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+  picture?: string;
+  email_verified: boolean;
+  primary_provider: string;
+  auth_methods: string[];
+  has_password: boolean;
+  has_google_account: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Note {
   id: string;
   timestamp: string; // Format: "MM:SS" or "HH:MM:SS"

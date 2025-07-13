@@ -1,3 +1,4 @@
+// Package database for connection and migrations
 package database
 
 import (
@@ -17,15 +18,12 @@ type Database struct {
 	DB *gorm.DB
 }
 
-// NewDatabase creates a new GORM database connection
 func NewDatabase(cfg *config.Config) (*Database, error) {
 	var dsn string
 
-	// Check if DATABASE_URL is provided, otherwise build DSN from individual components
 	if cfg.Database.URL != "" {
 		dsn = cfg.Database.URL
 	} else {
-		// Build DSN (Data Source Name)
 		dsn = fmt.Sprintf(
 			"host=%s port=%s user=%s password=%s dbname=%s sslmode=%s",
 			cfg.Database.Host,
@@ -37,9 +35,8 @@ func NewDatabase(cfg *config.Config) (*Database, error) {
 		)
 	}
 
-	// Configure GORM logger
 	gormLogger := logger.New(
-		&GormLogWriter{}, // Custom log writer that uses zerolog
+		&GormLogWriter{},
 		logger.Config{
 			SlowThreshold:             200 * time.Millisecond,
 			LogLevel:                  logger.Info,
@@ -48,7 +45,6 @@ func NewDatabase(cfg *config.Config) (*Database, error) {
 		},
 	)
 
-	// Configure GORM with retry logic
 	var db *gorm.DB
 	var err error
 	var retryCount int
@@ -56,7 +52,6 @@ func NewDatabase(cfg *config.Config) (*Database, error) {
 	retryDelay := 2 * time.Second
 
 	for retryCount < maxRetries {
-		// Open GORM connection
 		db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{
 			Logger: gormLogger,
 			NowFunc: func() time.Time {
@@ -65,7 +60,6 @@ func NewDatabase(cfg *config.Config) (*Database, error) {
 		})
 
 		if err == nil {
-			// Test connection
 			sqlDB, err := db.DB()
 			if err == nil {
 				err = sqlDB.Ping()
@@ -88,7 +82,6 @@ func NewDatabase(cfg *config.Config) (*Database, error) {
 
 		if retryCount < maxRetries {
 			time.Sleep(retryDelay)
-			// Exponential backoff
 			retryDelay *= 2
 		}
 	}
@@ -107,7 +100,6 @@ func NewDatabase(cfg *config.Config) (*Database, error) {
 	return &Database{DB: db}, nil
 }
 
-// Close closes the database connection
 func (db *Database) Close() {
 	if db.DB != nil {
 		sqlDB, err := db.DB.DB()
@@ -122,7 +114,6 @@ func (db *Database) Close() {
 	}
 }
 
-// Ping checks if the database connection is alive
 func (db *Database) Ping(ctx context.Context) error {
 	sqlDB, err := db.DB.DB()
 	if err != nil {
@@ -131,52 +122,28 @@ func (db *Database) Ping(ctx context.Context) error {
 	return sqlDB.PingContext(ctx)
 }
 
-// GormLogWriter is a custom log writer for GORM that uses zerolog
 type GormLogWriter struct{}
 
-// Printf implements the logger.Writer interface for GORM
 func (w *GormLogWriter) Printf(format string, args ...interface{}) {
 	log.Debug().Msgf(format, args...)
 }
 
-// RunMigrations runs auto-migrations for all models
-func (db *Database) RunMigrations() error {
-	log.Info().Msg("Starting database migrations...")
-	
-	// Get all models
-	modelsToMigrate := models.AllModels()
-	
-	// Run auto-migration for all models
-	if err := db.DB.AutoMigrate(modelsToMigrate...); err != nil {
-		log.Error().Err(err).Msg("Failed to run database migrations")
-		return err
-	}
-	
-	log.Info().Msg("Database migrations completed successfully")
-	return nil
+func (d *Database) RunMigrations() error {
+	return d.DB.AutoMigrate(models.AllModels()...)
 }
 
-// AutoMigrate runs migrations for the provided models
-func (db *Database) AutoMigrate(models ...interface{}) error {
-	return db.DB.AutoMigrate(models...)
+func (d *Database) Create(value interface{}) error {
+	return d.DB.Create(value).Error
 }
 
-// CreateRecord creates a new record in the database
-func (db *Database) CreateRecord(value interface{}) error {
-	return db.DB.Create(value).Error
+func (d *Database) Find(dest interface{}, id interface{}) error {
+	return d.DB.First(dest, id).Error
 }
 
-// FindRecord finds a record by its primary key
-func (db *Database) FindRecord(dest interface{}, primaryKey interface{}) error {
-	return db.DB.First(dest, primaryKey).Error
+func (d *Database) Update(value interface{}) error {
+	return d.DB.Save(value).Error
 }
 
-// UpdateRecord updates a record in the database
-func (db *Database) UpdateRecord(value interface{}) error {
-	return db.DB.Save(value).Error
-}
-
-// DeleteRecord deletes a record from the database
-func (db *Database) DeleteRecord(value interface{}) error {
-	return db.DB.Delete(value).Error
+func (d *Database) Delete(value interface{}) error {
+	return d.DB.Delete(value).Error
 }

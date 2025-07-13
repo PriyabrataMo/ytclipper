@@ -75,7 +75,7 @@ class YouTubeHandler {
   private waitForPlayer() {
     const checkPlayer = () => {
       this.player = document.querySelector('video') as HTMLVideoElement;
-      console.log('Checking for YouTube player:', this.player);
+      // console.log('Checking for YouTube player:', this.player);
       if (this.player) {
         this.detectVideoChange();
         this.injectClipButton();
