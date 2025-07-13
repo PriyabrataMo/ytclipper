@@ -28,11 +28,12 @@ func SetupRouter(db *database.Database, cfg *config.Config) *gin.Engine {
 	r.Use(middleware.ResponseFormatter())
 	r.Use(middleware.RequestLogger())
 
-	// Initialize Auth0 service
-	auth0Service, err := auth.NewAuth0Service(&cfg.Auth0)
-	if err != nil {
-		panic("Failed to initialize Auth0 service: " + err.Error())
-	}
+	// Initialize authentication services
+	jwtService := auth.NewJWTService(&cfg.JWT)
+	emailService := auth.NewEmailService()
+	googleService := auth.NewGoogleOAuthService(&cfg.Google, &cfg.Auth, jwtService)
+	authMiddleware := auth.NewAuthMiddleware(jwtService, &cfg.Auth)
+	authHandlers := auth.NewAuthHandlers(googleService, authMiddleware, jwtService, emailService, db.DB)
 
 	// Add NoRoute handler for proper 404 responses
 	r.NoRoute(func(c *gin.Context) {
@@ -45,10 +46,8 @@ func SetupRouter(db *database.Database, cfg *config.Config) *gin.Engine {
 	r.GET("/health", handlers.HealthCheck)
 	r.GET("/db-health", handlers.DBHealthCheck(db))
 
-	// Auth0 routes
-	r.GET("/login", auth0Service.LoginHandler())
-	r.GET("/callback", auth0Service.CallbackHandler())
-	r.GET("/logout", auth0Service.LogoutHandler())
+	// Setup authentication routes
+	authHandlers.SetupAuthRoutes(r)
 
 	// Root welcome page
 	r.GET("/", func(c *gin.Context) {
@@ -90,17 +89,17 @@ func SetupRouter(db *database.Database, cfg *config.Config) *gin.Engine {
 		// Auth routes
 		authRoutes := v1.Group("/auth")
 		{
-			authRoutes.GET("/user", auth0Service.GetUserInfo())
-			authRoutes.GET("/logout", auth0Service.LogoutHandler())
+			authRoutes.GET("/user", authHandlers.GetCurrentUserHandler())
+			authRoutes.GET("/me", authMiddleware.RequireAuth(), authHandlers.GetCurrentUserHandler())
 
 			// Extension authentication endpoints
-			authRoutes.POST("/verify", auth.RequireAuth(&cfg.Auth0), handlers.VerifyToken)
-			authRoutes.GET("/profile", auth.RequireAuth(&cfg.Auth0), handlers.GetUserProfile)
+			authRoutes.POST("/verify", authMiddleware.RequireAuth(), handlers.VerifyToken)
+			authRoutes.GET("/profile", authMiddleware.RequireAuth(), handlers.GetUserProfile)
 		}
 
 		// Protected routes
 		protected := v1.Group("")
-		protected.Use(auth.RequireAuth(&cfg.Auth0))
+		protected.Use(authMiddleware.RequireAuth())
 		{
 			// User profile endpoint
 			protected.GET("/profile", handlers.GetUserProfile)
