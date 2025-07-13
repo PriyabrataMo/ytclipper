@@ -8,17 +8,21 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/shubhamku044/ytclipper/internal/config"
 	"github.com/shubhamku044/ytclipper/internal/middleware"
+	"github.com/shubhamku044/ytclipper/internal/models"
+	"gorm.io/gorm"
 )
 
 type AuthMiddleware struct {
 	jwtService *JWTService
 	config     *config.AuthConfig
+	db         *gorm.DB
 }
 
-func NewAuthMiddleware(jwtService *JWTService, config *config.AuthConfig) *AuthMiddleware {
+func NewAuthMiddleware(jwtService *JWTService, config *config.AuthConfig, db *gorm.DB) *AuthMiddleware {
 	return &AuthMiddleware{
 		jwtService: jwtService,
 		config:     config,
+		db:         db,
 	}
 }
 
@@ -133,11 +137,30 @@ func (a *AuthMiddleware) setAuthCookies(c *gin.Context, tokenPair *TokenPair) {
 }
 
 func (a *AuthMiddleware) setUserContext(c *gin.Context, claims *AccessTokenClaims) {
+	// Fetch user details from database for complete information
+	var user models.User
+	if err := a.db.Where("id = ?", claims.UserID).First(&user).Error; err != nil {
+		log.Error().Err(err).Str("user_id", claims.UserID).Msg("Failed to fetch user details")
+		// Fall back to claims data if database fetch fails
+		c.Set("user_id", claims.UserID)
+		c.Set("user_email", claims.Email)
+		c.Set("user_name", claims.Name)
+		c.Set("user_picture", claims.Picture)
+		c.Set("claims", claims)
+		return
+	}
+
+	// Set user information from database
 	c.Set("user_id", claims.UserID)
-	c.Set("user_email", claims.Email)
-	c.Set("user_name", claims.Name)
-	c.Set("user_picture", claims.Picture)
+	c.Set("user_email", user.Email)
+	c.Set("user_name", user.Name)
+	c.Set("user_picture", user.Picture)
+	c.Set("user_google_id", user.GoogleID)
+	c.Set("user_provider", user.Provider)
+	c.Set("user_email_verified", user.EmailVerified)
+	c.Set("user_has_password", user.Password != "")
 	c.Set("claims", claims)
+	c.Set("user", user)
 }
 
 // Helper functions for getting user information from context
@@ -184,4 +207,54 @@ func GetClaims(c *gin.Context) (*AccessTokenClaims, bool) {
 	}
 	accessClaims, ok := claims.(*AccessTokenClaims)
 	return accessClaims, ok
+}
+
+// GetUser returns the full user object from context
+func GetUser(c *gin.Context) (*models.User, bool) {
+	user, exists := c.Get("user")
+	if !exists {
+		return nil, false
+	}
+	userObj, ok := user.(models.User)
+	return &userObj, ok
+}
+
+// GetUserGoogleID returns the user's Google ID from context
+func GetUserGoogleID(c *gin.Context) (string, bool) {
+	googleID, exists := c.Get("user_google_id")
+	if !exists {
+		return "", false
+	}
+	googleIDStr, ok := googleID.(string)
+	return googleIDStr, ok
+}
+
+// GetUserProvider returns the user's authentication provider from context
+func GetUserProvider(c *gin.Context) (*string, bool) {
+	provider, exists := c.Get("user_provider")
+	if !exists {
+		return nil, false
+	}
+	providerPtr, ok := provider.(*string)
+	return providerPtr, ok
+}
+
+// GetUserEmailVerified returns whether the user's email is verified
+func GetUserEmailVerified(c *gin.Context) (bool, bool) {
+	verified, exists := c.Get("user_email_verified")
+	if !exists {
+		return false, false
+	}
+	verifiedBool, ok := verified.(bool)
+	return verifiedBool, ok
+}
+
+// GetUserHasPassword returns whether the user has password authentication set up
+func GetUserHasPassword(c *gin.Context) (bool, bool) {
+	hasPassword, exists := c.Get("user_has_password")
+	if !exists {
+		return false, false
+	}
+	hasPasswordBool, ok := hasPassword.(bool)
+	return hasPasswordBool, ok
 }

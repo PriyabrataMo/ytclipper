@@ -1,5 +1,5 @@
+import { useAuth } from '@/hooks/useAuth';
 import React, { useState } from 'react';
-import { authService } from '../../services/auth';
 
 interface RegisterFormProps {
   onToggleForm: () => void;
@@ -10,56 +10,50 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onToggleForm }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [localError, setLocalError] = useState('');
   const [success, setSuccess] = useState('');
+
+  const {
+    register,
+    loginWithGoogle,
+    isRegistering,
+    error: authError,
+  } = useAuth();
+
+  const error = localError || authError;
+  const loading = isRegistering;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    setError('');
+    setLocalError('');
     setSuccess('');
 
+    if (!name || !email || !password || !confirmPassword) {
+      setLocalError('Please fill in all fields');
+      return;
+    }
+
     if (password !== confirmPassword) {
-      setError('Passwords do not match');
-      setLoading(false);
+      setLocalError('Passwords do not match');
       return;
     }
 
     if (password.length < 8) {
-      setError('Password must be at least 8 characters long');
-      setLoading(false);
+      setLocalError('Password must be at least 8 characters long');
       return;
     }
 
-    try {
-      await authService.register(name, email, password);
-      setSuccess(
-        'Account created successfully! Please check your email to verify your account.',
-      );
-      // Clear form
-      setName('');
-      setEmail('');
-      setPassword('');
-      setConfirmPassword('');
-    } catch (err: any) {
-      setError(err.message || 'Registration failed');
-    } finally {
-      setLoading(false);
-    }
+    register({ name, email, password });
+
+    setName('');
+    setEmail('');
+    setPassword('');
+    setConfirmPassword('');
   };
 
   const handleGoogleLogin = async () => {
-    setLoading(true);
-    setError('');
-
-    try {
-      await authService.loginWithGoogle();
-    } catch (err: any) {
-      setError(err.message || 'Google login failed');
-    } finally {
-      setLoading(false);
-    }
+    setLocalError('');
+    loginWithGoogle();
   };
 
   return (

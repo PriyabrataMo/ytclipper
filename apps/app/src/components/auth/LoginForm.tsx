@@ -1,6 +1,5 @@
+import { useAuth } from '@/hooks/useAuth';
 import React, { useState } from 'react';
-import { useAuth } from '../../contexts/AuthContext';
-import { authService } from '../../services/auth';
 
 interface LoginFormProps {
   onToggleForm: () => void;
@@ -9,36 +8,33 @@ interface LoginFormProps {
 export const LoginForm: React.FC<LoginFormProps> = ({ onToggleForm }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const { login } = useAuth();
+  const [localError, setLocalError] = useState('');
+
+  const {
+    loginWithEmailPassword,
+    loginWithGoogle,
+    isLoggingIn,
+    error: authError,
+  } = useAuth();
+
+  const error = localError || authError;
+  const loading = isLoggingIn;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    setError('');
+    setLocalError('');
 
-    try {
-      await authService.login(email, password);
-      // The AuthContext will handle the login state update
-    } catch (err: any) {
-      setError(err.message || 'Login failed');
-    } finally {
-      setLoading(false);
+    if (!email || !password) {
+      setLocalError('Please fill in all fields');
+      return;
     }
+
+    loginWithEmailPassword({ email, password });
   };
 
   const handleGoogleLogin = async () => {
-    setLoading(true);
-    setError('');
-
-    try {
-      await authService.loginWithGoogle();
-    } catch (err: any) {
-      setError(err.message || 'Google login failed');
-    } finally {
-      setLoading(false);
-    }
+    setLocalError('');
+    loginWithGoogle();
   };
 
   return (

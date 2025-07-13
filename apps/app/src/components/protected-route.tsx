@@ -1,27 +1,26 @@
 import React from 'react';
-
-import { useAuth0 } from '@auth0/auth0-react';
 import { Navigate, useLocation } from 'react-router';
 
+import { useAuth } from '../hooks/useAuth';
 import Loading from './loading';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
 }
 
-const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
-  const { isAuthenticated, isLoading } = useAuth0();
+export const ProtectedRoute = ({ children }: ProtectedRouteProps) => {
+  const { isAuthenticated, isLoading, isInitialized } = useAuth();
   const location = useLocation();
 
-  if (isLoading) {
+  if (!isInitialized || isLoading) {
     return <Loading />;
   }
 
   if (!isAuthenticated) {
-    return <Navigate to='/login' state={{ from: location }} replace />;
+    return <Navigate to='/auth' state={{ from: location }} replace />;
   }
 
-  return children;
+  return <>{children}</>;
 };
 
 export default ProtectedRoute;

@@ -1,283 +1,173 @@
 import config from '@/config';
+import type { User } from '@/types';
 
-export interface User {
-  id: string;
+export interface LoginRequest {
   email: string;
+  password: string;
+}
+
+export interface RegisterRequest {
   name: string;
-  picture?: string;
-  provider: string;
-  emailVerified: boolean;
+  email: string;
+  password: string;
 }
 
-export interface TokenResponse {
-  access_token: string;
-  refresh_token: string;
-  token_type: string;
-  expires_in: number;
+export interface ForgotPasswordRequest {
+  email: string;
 }
 
-class AuthService {
-  private apiUrl: string;
-  private user: User | null = null;
-  private isAuthenticated = false;
-  private listeners: Array<(user: User | null) => void> = [];
+export interface ResetPasswordRequest {
+  token: string;
+  password: string;
+}
+
+export interface VerifyEmailRequest {
+  token: string;
+}
+
+export interface AddPasswordRequest {
+  password: string;
+}
+
+export interface GoogleLoginResponse {
+  auth_url: string;
+}
+
+class AuthApiService {
+  private baseURL: string;
 
   constructor() {
-    this.apiUrl = config.apiUrl;
-    this.checkAuthStatus();
+    this.baseURL = config.apiUrl;
   }
 
-  // Check if user is authenticated on app load
-  private async checkAuthStatus() {
-    try {
-      const response = await fetch(`${this.apiUrl}/auth/me`, {
-        credentials: 'include',
-      });
-
-      if (response.ok) {
-        const user = await response.json();
-        this.setUser(user);
-      } else {
-        this.setUser(null);
-      }
-    } catch (error) {
-      console.error('Error checking auth status:', error);
-      this.setUser(null);
-    }
-  }
-
-  // Login with Google
-  async loginWithGoogle() {
-    try {
-      const response = await fetch(`${this.apiUrl}/auth/google/login`, {
-        method: 'GET',
-        credentials: 'include',
-        headers: {
-          Accept: 'application/json',
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        // Redirect to Google OAuth
-        window.location.href = data.auth_url;
-      } else {
-        throw new Error('Failed to initiate Google login');
-      }
-    } catch (error) {
-      console.error('Error during Google login:', error);
-      throw error;
-    }
-  }
-
-  // Handle OAuth callback (called when user returns from Google)
-  async handleAuthCallback() {
-    const urlParams = new URLSearchParams(window.location.search);
-    const authSuccess = urlParams.get('auth');
-
-    if (authSuccess === 'success') {
-      // Clean up URL
-      window.history.replaceState({}, document.title, window.location.pathname);
-
-      // Refresh auth status
-      await this.checkAuthStatus();
-      return true;
-    }
-
-    return false;
-  }
-
-  // Logout
-  async logout() {
-    try {
-      await fetch(`${this.apiUrl}/auth/logout`, {
-        method: 'POST',
-        credentials: 'include',
-      });
-    } catch (error) {
-      console.error('Error during logout:', error);
-    } finally {
-      this.setUser(null);
-    }
-  }
-
-  // Refresh access token
-  async refreshToken(): Promise<boolean> {
-    try {
-      const response = await fetch(`${this.apiUrl}/auth/refresh`, {
-        method: 'POST',
-        credentials: 'include',
-      });
-
-      if (response.ok) {
-        return true;
-      }
-    } catch (error) {
-      console.error('Error refreshing token:', error);
-    }
-
-    this.setUser(null);
-    return false;
-  }
-
-  // Make authenticated API requests
-  async apiRequest(endpoint: string, options: RequestInit = {}) {
-    const url = `${this.apiUrl}${endpoint}`;
-    const defaultOptions: RequestInit = {
-      credentials: 'include',
+  private async request<T>(
+    endpoint: string,
+    options: RequestInit = {},
+  ): Promise<T> {
+    const url = `${this.baseURL}${endpoint}`;
+    const config: RequestInit = {
+      ...options,
       headers: {
         'Content-Type': 'application/json',
         ...options.headers,
       },
+      credentials: 'include', // Include cookies for authentication
     };
 
-    const requestOptions = { ...defaultOptions, ...options };
+    const response = await fetch(url, config);
+    const responseData = await response.json();
 
+    if (!response.ok) {
+      const errorMessage =
+        responseData.error?.message ||
+        responseData.message ||
+        `HTTP error! status: ${response.status}`;
+      throw new Error(errorMessage);
+    }
+
+    // Handle structured response format
+    if (responseData.success && responseData.data !== undefined) {
+      return responseData.data;
+    }
+
+    // Handle direct response format
+    return responseData;
+  }
+
+  async getCurrentUser(): Promise<User | null> {
     try {
-      let response = await fetch(url, requestOptions);
-
-      // If unauthorized, try to refresh token
-      if (response.status === 401) {
-        const refreshSuccess = await this.refreshToken();
-        if (refreshSuccess) {
-          // Retry the original request
-          response = await fetch(url, requestOptions);
-        } else {
-          // Refresh failed, user needs to login again
-          this.setUser(null);
-          throw new Error('Authentication required');
-        }
-      }
-
+      const response = await this.request<User>('/auth/me');
       return response;
     } catch (error) {
-      console.error('API request error:', error);
+      // If not authenticated, return null instead of throwing
+      if (
+        error instanceof Error &&
+        (error.message.includes('401') || error.message.includes('NO_TOKEN'))
+      ) {
+        return null;
+      }
       throw error;
     }
   }
 
-  // Email/password authentication methods
-  async login(email: string, password: string): Promise<User> {
-    const response = await this.apiRequest('/auth/login', {
+  async login(credentials: LoginRequest): Promise<User> {
+    const response = await this.request<{ user: User }>('/auth/login', {
       method: 'POST',
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify(credentials),
     });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Login failed');
-    }
-
-    const data = await response.json();
-    const user = data.user;
-
-    this.setUser(user);
-    return user;
+    return response.user;
   }
 
-  async register(name: string, email: string, password: string): Promise<User> {
-    const response = await this.apiRequest('/auth/register', {
+  async register(userData: RegisterRequest): Promise<User> {
+    const response = await this.request<{ user: User }>('/auth/register', {
       method: 'POST',
-      body: JSON.stringify({ name, email, password }),
+      body: JSON.stringify(userData),
     });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Registration failed');
-    }
-
-    const data = await response.json();
-    const user = data.user;
-
-    this.setUser(user);
-    return user;
+    return response.user;
   }
 
-  async forgotPassword(email: string): Promise<void> {
-    const response = await this.apiRequest('/auth/forgot-password', {
+  async loginWithGoogle(): Promise<GoogleLoginResponse> {
+    // Get the auth URL from the backend first
+    const response = await this.request<GoogleLoginResponse>(
+      '/auth/google/login',
+      {
+        method: 'GET',
+        headers: {
+          Accept: 'application/json',
+          Origin: window.location.origin, // Explicitly set the origin
+        },
+      },
+    );
+
+    // Now redirect to the Google OAuth URL
+    window.location.href = response.auth_url;
+    return response;
+  }
+
+  async logout(): Promise<void> {
+    await this.request('/auth/logout', {
       method: 'POST',
-      body: JSON.stringify({ email }),
     });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Failed to send reset email');
-    }
   }
 
-  async resetPassword(token: string, password: string): Promise<void> {
-    const response = await this.apiRequest('/auth/reset-password', {
+  async forgotPassword(data: ForgotPasswordRequest): Promise<void> {
+    await this.request('/auth/forgot-password', {
       method: 'POST',
-      body: JSON.stringify({ token, password }),
+      body: JSON.stringify(data),
     });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Password reset failed');
-    }
   }
 
-  async verifyEmail(token: string): Promise<void> {
-    const response = await this.apiRequest('/auth/verify-email', {
+  async resetPassword(data: ResetPasswordRequest): Promise<void> {
+    await this.request('/auth/reset-password', {
       method: 'POST',
-      body: JSON.stringify({ token }),
+      body: JSON.stringify(data),
     });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Email verification failed');
-    }
   }
 
-  // Set user and notify listeners
-  private setUser(user: User | null) {
-    this.user = user;
-    this.isAuthenticated = !!user;
-    this.listeners.forEach(listener => listener(user));
+  async verifyEmail(data: VerifyEmailRequest): Promise<void> {
+    await this.request('/auth/verify-email', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   }
 
-  // Get current user
-  getUser(): User | null {
-    return this.user;
+  async addPassword(data: AddPasswordRequest): Promise<void> {
+    await this.request('/auth/add-password', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   }
 
-  // Check if user is authenticated
-  isAuth(): boolean {
-    return this.isAuthenticated;
-  }
-
-  // Subscribe to auth state changes
-  onAuthStateChanged(callback: (user: User | null) => void) {
-    this.listeners.push(callback);
-
-    // Call immediately with current state
-    callback(this.user);
-
-    // Return unsubscribe function
-    return () => {
-      this.listeners = this.listeners.filter(listener => listener !== callback);
-    };
-  }
-
-  // Get access token from cookie (for manual API calls)
-  async getAccessToken(): Promise<string | null> {
+  async handleAuthCallback(): Promise<boolean> {
     try {
-      const response = await fetch(`${this.apiUrl}/auth/token`, {
-        credentials: 'include',
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        return data.access_token;
-      }
+      // After OAuth callback, check if user is authenticated
+      const user = await this.getCurrentUser();
+      return !!user;
     } catch (error) {
-      console.error('Error getting access token:', error);
+      console.error('Auth callback error:', error);
+      return false;
     }
-
-    return null;
   }
 }
 
-// Export singleton instance
-export const authService = new AuthService();
-export default authService;
+export const authApi = new AuthApiService();

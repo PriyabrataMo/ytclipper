@@ -1,8 +1,8 @@
-import { useAuth0 } from '@auth0/auth0-react';
 import { Button } from '@ytclipper/ui';
+import { useAuth } from '../hooks/useAuth';
 
 const LogoutButton = () => {
-  const { logout, isAuthenticated, isLoading } = useAuth0();
+  const { logout, isAuthenticated, isLoading } = useAuth();
 
   if (isLoading) {
     return <Button disabled>Loading...</Button>;
@@ -15,15 +15,7 @@ const LogoutButton = () => {
   return (
     <Button
       onClick={() => {
-        window.postMessage(
-          { type: 'AUTH0_LOGOUT', timestamp: Date.now() },
-          'http://localhost:5173',
-        );
-        logout({
-          logoutParams: {
-            returnTo: window.location.origin,
-          },
-        });
+        logout();
       }}
       variant='outline'
       className='border-red-500 text-red-500 hover:bg-red-50'

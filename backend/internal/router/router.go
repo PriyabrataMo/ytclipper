@@ -31,8 +31,8 @@ func SetupRouter(db *database.Database, cfg *config.Config) *gin.Engine {
 	// Initialize authentication services
 	jwtService := auth.NewJWTService(&cfg.JWT)
 	emailService := auth.NewEmailService()
-	googleService := auth.NewGoogleOAuthService(&cfg.Google, &cfg.Auth, jwtService)
-	authMiddleware := auth.NewAuthMiddleware(jwtService, &cfg.Auth)
+	googleService := auth.NewGoogleOAuthService(&cfg.Google, &cfg.Auth, jwtService, db.DB)
+	authMiddleware := auth.NewAuthMiddleware(jwtService, &cfg.Auth, db.DB)
 	authHandlers := auth.NewAuthHandlers(googleService, authMiddleware, jwtService, emailService, db.DB)
 
 	// Add NoRoute handler for proper 404 responses

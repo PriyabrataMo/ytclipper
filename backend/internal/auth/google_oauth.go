@@ -13,8 +13,10 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/shubhamku044/ytclipper/internal/config"
 	"github.com/shubhamku044/ytclipper/internal/middleware"
+	"github.com/shubhamku044/ytclipper/internal/models"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
+	"gorm.io/gorm"
 )
 
 type GoogleOAuthService struct {
@@ -22,6 +24,7 @@ type GoogleOAuthService struct {
 	authConfig *config.AuthConfig
 	oauth      *oauth2.Config
 	jwtService *JWTService
+	db         *gorm.DB
 }
 
 type GoogleUserInfo struct {
@@ -35,7 +38,7 @@ type GoogleUserInfo struct {
 	Locale        string `json:"locale"`
 }
 
-func NewGoogleOAuthService(cfg *config.GoogleOAuthConfig, authCfg *config.AuthConfig, jwtService *JWTService) *GoogleOAuthService {
+func NewGoogleOAuthService(cfg *config.GoogleOAuthConfig, authCfg *config.AuthConfig, jwtService *JWTService, db *gorm.DB) *GoogleOAuthService {
 	oauth := &oauth2.Config{
 		ClientID:     cfg.ClientID,
 		ClientSecret: cfg.ClientSecret,
@@ -52,6 +55,7 @@ func NewGoogleOAuthService(cfg *config.GoogleOAuthConfig, authCfg *config.AuthCo
 		authConfig: authCfg,
 		oauth:      oauth,
 		jwtService: jwtService,
+		db:         db,
 	}
 }
 
@@ -136,21 +140,36 @@ func (g *GoogleOAuthService) CallbackHandler() gin.HandlerFunc {
 			return
 		}
 
-		// Generate JWT tokens
-		tokenPair, err := g.jwtService.GenerateTokenPair(userInfo.ID, userInfo.Email, userInfo.Name, userInfo.Picture)
+		// Find or create user in database
+		user, err := g.findOrCreateUser(userInfo)
 		if err != nil {
-			log.Error().Err(err).Msg("Failed to generate JWT tokens")
+			log.Error().Err(err).Msg("Failed to find or create user")
+			middleware.RespondWithError(c, http.StatusInternalServerError, "USER_CREATION_ERROR", "Failed to create user account", nil)
+			return
+		}
+
+		// Generate JWT tokens using the database user ID
+		accessToken, err := g.jwtService.GenerateAccessToken(user.ID)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to generate access token")
 			middleware.RespondWithError(c, http.StatusInternalServerError, "JWT_ERROR", "Failed to generate authentication tokens", nil)
 			return
 		}
 
-		// Set secure cookies
-		g.setAuthCookies(c, tokenPair)
+		refreshToken, err := g.jwtService.GenerateRefreshToken(user.ID)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to generate refresh token")
+			middleware.RespondWithError(c, http.StatusInternalServerError, "JWT_ERROR", "Failed to generate authentication tokens", nil)
+			return
+		}
+
+		// Set HTTP-only cookies
+		g.jwtService.SetTokenCookies(c, accessToken, refreshToken)
 
 		log.Info().
-			Str("user_id", userInfo.ID).
-			Str("email", userInfo.Email).
-			Msg("User authenticated successfully")
+			Str("user_id", user.ID.String()).
+			Str("email", user.Email).
+			Msg("User authenticated successfully via Google OAuth")
 
 		// Redirect to frontend
 		frontendURL := g.getFrontendURL(c)
@@ -175,6 +194,57 @@ func (g *GoogleOAuthService) getUserInfo(accessToken string) (*GoogleUserInfo, e
 	}
 
 	return &userInfo, nil
+}
+
+// findOrCreateUser finds an existing user or creates a new one based on Google OAuth info
+func (g *GoogleOAuthService) findOrCreateUser(userInfo *GoogleUserInfo) (*models.User, error) {
+	var user models.User
+
+	// First, try to find user by Google ID
+	if err := g.db.Where("google_id = ?", userInfo.ID).First(&user).Error; err == nil {
+		// User exists with this Google ID, update their info
+		user.Name = userInfo.Name
+		user.Picture = userInfo.Picture
+		user.EmailVerified = userInfo.VerifiedEmail
+		if err := g.db.Save(&user).Error; err != nil {
+			return nil, fmt.Errorf("failed to update user: %w", err)
+		}
+		return &user, nil
+	}
+
+	// If not found by Google ID, try to find by email
+	if err := g.db.Where("email = ?", userInfo.Email).First(&user).Error; err == nil {
+		// User exists with this email, link Google account
+		user.GoogleID = userInfo.ID
+		user.Name = userInfo.Name
+		user.Picture = userInfo.Picture
+		user.EmailVerified = userInfo.VerifiedEmail
+		provider := "google"
+		user.Provider = &provider
+		user.ProviderID = &userInfo.ID
+		if err := g.db.Save(&user).Error; err != nil {
+			return nil, fmt.Errorf("failed to link Google account: %w", err)
+		}
+		return &user, nil
+	}
+
+	// User doesn't exist, create new user
+	provider := "google"
+	user = models.User{
+		Email:         userInfo.Email,
+		Name:          userInfo.Name,
+		Picture:       userInfo.Picture,
+		GoogleID:      userInfo.ID,
+		Provider:      &provider,
+		ProviderID:    &userInfo.ID,
+		EmailVerified: userInfo.VerifiedEmail,
+	}
+
+	if err := g.db.Create(&user).Error; err != nil {
+		return nil, fmt.Errorf("failed to create user: %w", err)
+	}
+
+	return &user, nil
 }
 
 func (g *GoogleOAuthService) setAuthCookies(c *gin.Context, tokenPair *TokenPair) {
@@ -202,6 +272,7 @@ func (g *GoogleOAuthService) getFrontendURL(c *gin.Context) string {
 		origin = "http://localhost:5173" // Default development frontend URL
 	}
 
+	log.Info().Str("origin", origin).Msg("Redirecting to frontend URL")
 	return origin
 }
 
