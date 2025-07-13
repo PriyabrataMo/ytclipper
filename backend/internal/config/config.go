@@ -16,17 +16,15 @@ type Config struct {
 	Database   DatabaseConfig
 	JWT        JWTConfig
 	Auth       AuthConfig
-	Auth0      Auth0Config
+	Google     GoogleOAuthConfig
 	API        APIConfig
 	Monitoring MonitoringConfig
 }
 
-type Auth0Config struct {
-	Domain       string
+type GoogleOAuthConfig struct {
 	ClientID     string
 	ClientSecret string
-	CallbackURL  string
-	Audience     string
+	RedirectURL  string
 }
 
 type ServerConfig struct {
@@ -51,8 +49,11 @@ type DatabaseConfig struct {
 }
 
 type JWTConfig struct {
-	Secret string
-	Expiry time.Duration
+	Secret             string
+	AccessTokenExpiry  time.Duration
+	RefreshTokenExpiry time.Duration
+	TokenIssuer        string
+	TokenAudience      string
 }
 
 type AuthConfig struct {
@@ -60,6 +61,9 @@ type AuthConfig struct {
 	JWTExpiryHours      int
 	PasswordResetExpiry time.Duration
 	TokenIssuer         string
+	CookieDomain        string
+	CookieSecure        bool
+	CookieHTTPOnly      bool
 }
 
 type APIConfig struct {
@@ -78,12 +82,10 @@ func Load() *Config {
 	}
 
 	return &Config{
-		Auth0: Auth0Config{
-			Domain:       getEnv("AUTH0_DOMAIN", ""),
-			ClientID:     getEnv("AUTH0_CLIENT_ID", ""),
-			ClientSecret: getEnv("AUTH0_CLIENT_SECRET", ""),
-			CallbackURL:  getEnv("AUTH0_CALLBACK_URL", "http://localhost:8080/callback"),
-			Audience:     getEnv("AUTH0_AUDIENCE", ""),
+		Google: GoogleOAuthConfig{
+			ClientID:     getEnv("GOOGLE_CLIENT_ID", ""),
+			ClientSecret: getEnv("GOOGLE_CLIENT_SECRET", ""),
+			RedirectURL:  getEnv("GOOGLE_REDIRECT_URL", "http://localhost:8080/auth/google/callback"),
 		},
 		Server: ServerConfig{
 			Port: getEnv("PORT", "8080"),
@@ -104,14 +106,20 @@ func Load() *Config {
 			SSLMode:  getEnv("DB_SSL_MODE", "disable"),
 		},
 		JWT: JWTConfig{
-			Secret: getEnv("JWT_SECRET", "development_secret"),
-			Expiry: getDurationEnv("JWT_EXPIRY", 24*time.Hour),
+			Secret:             getEnv("JWT_SECRET", "ytclipper_jwt_secret_key"),
+			AccessTokenExpiry:  getDurationEnv("JWT_ACCESS_TOKEN_EXPIRY", 15*time.Minute),
+			RefreshTokenExpiry: getDurationEnv("JWT_REFRESH_TOKEN_EXPIRY", 7*24*time.Hour), // 7 days
+			TokenIssuer:        getEnv("JWT_ISSUER", "ytclipper-api"),
+			TokenAudience:      getEnv("JWT_AUDIENCE", "ytclipper-app"),
 		},
 		Auth: AuthConfig{
 			JWTSecret:           getEnv("AUTH_JWT_SECRET", "ytclipper_secret_key"),
 			JWTExpiryHours:      getIntEnv("AUTH_JWT_EXPIRY_HOURS", 72),
 			PasswordResetExpiry: getDurationEnv("AUTH_PASSWORD_RESET_EXPIRY", 24*time.Hour),
 			TokenIssuer:         getEnv("AUTH_TOKEN_ISSUER", "ytclipper-app"),
+			CookieDomain:        getEnv("COOKIE_DOMAIN", ""),
+			CookieSecure:        getBoolEnv("COOKIE_SECURE", false),
+			CookieHTTPOnly:      getBoolEnv("COOKIE_HTTP_ONLY", true),
 		},
 		API: APIConfig{
 			Timeout:   getDurationEnv("API_TIMEOUT", 30*time.Second),

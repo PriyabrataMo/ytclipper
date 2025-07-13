@@ -1,28 +1,39 @@
 {
   "name": "@ytclipper/eslint-config",
   "version": "0.0.1",
-  "description": "Shared ESLint configuration for YTClipper projects",
-  "main": "index.js",
+  "private": true,
   "type": "module",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    },
+    "./react.js": {
+      "types": "./react.d.ts",
+      "default": "./react.js"
+    }
+  },
   "files": [
     "index.js",
-    "react.js"
+    "index.d.ts",
+    "react.js",
+    "react.d.ts"
   ],
   "dependencies": {
-    "@eslint/js": "^9.30.0",
-    "@typescript-eslint/eslint-plugin": "^8.35.1",
-    "@typescript-eslint/parser": "^8.35.1",
-    "eslint-config-prettier": "^9.1.0",
-    "eslint-plugin-import": "^2.32.0",
-    "eslint-plugin-react": "^7.37.5",
-    "eslint-plugin-react-hooks": "^5.2.0",
-    "eslint-plugin-react-refresh": "^0.4.20",
+    "@eslint/js": "^9.15.0",
+    "@typescript-eslint/eslint-plugin": "^8.13.0",
+    "@typescript-eslint/parser": "^8.13.0",
     "eslint-plugin-jsx-a11y": "^6.10.2",
-    "globals": "^16.2.0",
-    "typescript-eslint": "^8.35.1"
+    "eslint-plugin-react": "^7.37.2",
+    "eslint-plugin-react-hooks": "^5.0.0",
+    "eslint-plugin-react-refresh": "^0.4.20",
+    "globals": "^15.12.0",
+    "typescript-eslint": "^8.13.0"
   },
-  "peerDependencies": {
-    "eslint": "^9.0.0",
-    "typescript": "^5.0.0"
+  "devDependencies": {
+    "eslint": "^9.15.0",
+    "typescript": "^5.6.3"
   }
 }

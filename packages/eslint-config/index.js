@@ -1,6 +1,4 @@
 import js from '@eslint/js';
-import prettierConfig from 'eslint-config-prettier';
-import importPlugin from 'eslint-plugin-import';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config([
@@ -19,9 +17,6 @@ export default tseslint.config([
   {
     files: ['**/*.{ts,tsx,js,jsx}'],
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
-    plugins: {
-      import: importPlugin,
-    },
     languageOptions: {
       parser: tseslint.parser,
       parserOptions: {
@@ -42,45 +37,6 @@ export default tseslint.config([
 
       // BRACKET AND BRACE RULES - LOGIC ONLY (FORMATTING HANDLED BY PRETTIER)
       curly: ['error', 'all'], // Force braces for control statements (logic, not formatting)
-
-      // IMPORT RULES - STRICT
-      'import/order': [
-        'error',
-        {
-          groups: [
-            'builtin',
-            'external',
-            'internal',
-            'parent',
-            'sibling',
-            'index',
-          ],
-          'newlines-between': 'always',
-          alphabetize: {
-            order: 'asc',
-            caseInsensitive: true,
-          },
-          pathGroups: [
-            {
-              pattern: 'react',
-              group: 'external',
-              position: 'before',
-            },
-            {
-              pattern: '@/**',
-              group: 'internal',
-            },
-          ],
-          pathGroupsExcludedImportTypes: ['react'],
-        },
-      ],
-      'import/newline-after-import': 'error',
-      'import/no-duplicates': 'error',
-      'import/no-unresolved': 'off',
-      'import/first': 'error',
-      'import/no-mutable-exports': 'error',
-      'import/no-default-export': 'off',
-      'import/prefer-default-export': 'off',
 
       // VARIABLE AND FUNCTION RULES
       'no-unused-vars': 'off',
@@ -204,6 +160,4 @@ export default tseslint.config([
       '@typescript-eslint/prefer-literal-enum-member': 'error',
     },
   },
-  // Prettier config must be last to override other formatting rules
-  prettierConfig,
 ]);

@@ -122,7 +122,9 @@ class YouTubeHandler {
   }
 
   injectNotePanel() {
-    if (document.getElementById('yt-clipper-note-panel')) return;
+    if (document.getElementById('yt-clipper-note-panel')) {
+      return;
+    }
 
     const panelHTML = `
       <div class="yt-clipper-note-panel" id="yt-clipper-note-panel">
@@ -224,7 +226,9 @@ class YouTubeHandler {
   }
 
   private addTag(tagText: string) {
-    if (!this.tagsContainer) return;
+    if (!this.tagsContainer) {
+      return;
+    }
 
     const tag = document.createElement('div');
     tag.className = 'tag';
@@ -237,7 +241,9 @@ class YouTubeHandler {
   }
 
   private togglePanel(open: boolean) {
-    if (!this.notePanel) return;
+    if (!this.notePanel) {
+      return;
+    }
 
     const videoContainer = document.querySelector('.html5-video-player');
     if (open) {
@@ -270,11 +276,15 @@ class YouTubeHandler {
   }
 
   private openNotePanel() {
-    if (!this.player || !this.currentVideoId) return;
+    if (!this.player || !this.currentVideoId) {
+      return;
+    }
 
     this.currentTimestamp = this.player.currentTime;
     const pageData = this.getPageData();
-    if (!pageData) return;
+    if (!pageData) {
+      return;
+    }
 
     // Update timestamp info
     const timestampInfo = document.getElementById('yt-clipper-timestamp-info');
@@ -289,14 +299,18 @@ class YouTubeHandler {
     (
       document.getElementById('yt-clipper-noteContent') as HTMLTextAreaElement
     ).value = '';
-    if (this.tagsContainer) this.tagsContainer.innerHTML = '';
+    if (this.tagsContainer) {
+      this.tagsContainer.innerHTML = '';
+    }
 
     this.togglePanel(true);
   }
 
   private updateClipButtonStyles() {
     const button = this.clipButton;
-    if (!button) return;
+    if (!button) {
+      return;
+    }
 
     // Position button at center of bottom control bar
     button.style.cssText = `
@@ -351,7 +365,9 @@ class YouTubeHandler {
   }
 
   private updateClipButtonVisibility() {
-    if (!this.clipButton) return;
+    if (!this.clipButton) {
+      return;
+    }
 
     if (this.isAuthenticated && this.clipperEnabled) {
       this.clipButton.style.display = 'flex !important';
@@ -395,7 +411,9 @@ class YouTubeHandler {
   }
 
   private async loadTimestamps() {
-    if (!this.currentVideoId) return;
+    if (!this.currentVideoId) {
+      return;
+    }
 
     try {
       const response = await chrome.runtime.sendMessage({
@@ -453,7 +471,9 @@ class YouTubeHandler {
   }
 
   private getPageData(): YouTubePageData | null {
-    if (!this.player || !this.currentVideoId) return null;
+    if (!this.player || !this.currentVideoId) {
+      return null;
+    }
 
     const titleElement = document.querySelector(
       'h1.ytd-watch-metadata yt-formatted-string',
@@ -538,7 +558,9 @@ class YouTubeHandler {
     const tags: string[] = [];
     this.tagsContainer?.querySelectorAll('.tag').forEach((tagEl) => {
       const tagText = tagEl.childNodes[0].textContent?.trim();
-      if (tagText) tags.push(tagText);
+      if (tagText) {
+        tags.push(tagText);
+      }
     });
 
     // Save using existing functionality
@@ -609,7 +631,9 @@ window.addEventListener('load', () => {
 });
 
 window.addEventListener('message', (event) => {
-  if (event.origin !== 'http://localhost:5173') return;
+  if (event.origin !== 'http://localhost:5173') {
+    return;
+  }
 
   if (event.data.type === 'AUTH0_TOKEN_UPDATE') {
     chrome.runtime.sendMessage({

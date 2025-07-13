@@ -105,7 +105,7 @@ func VerifyToken(c *gin.Context) {
 		ID:        userID,
 		Email:     claims.RegisteredClaims.Subject, // In Auth0, subject is typically the user ID
 		Name:      "",                              // We'd need to get this from the token's custom claims or from a user lookup
-		CreatedAt: time.Unix(claims.RegisteredClaims.IssuedAt, 0).Format(time.RFC3339),
+		CreatedAt: claims.RegisteredClaims.IssuedAt.Time.Format(time.RFC3339),
 	}
 
 	middleware.RespondWithOK(c, gin.H{
@@ -135,14 +135,14 @@ func GetUserProfile(c *gin.Context) {
 		ID:        userID,
 		Email:     claims.RegisteredClaims.Subject,
 		Name:      "", // You might want to add custom claims for name
-		CreatedAt: time.Unix(claims.RegisteredClaims.IssuedAt, 0).Format(time.RFC3339),
+		CreatedAt: claims.RegisteredClaims.IssuedAt.Time.Format(time.RFC3339),
 	}
 
 	middleware.RespondWithOK(c, gin.H{
 		"user": user,
 		"token_info": gin.H{
-			"issued_at":  claims.RegisteredClaims.IssuedAt,
-			"expires_at": claims.RegisteredClaims.Expiry,
+			"issued_at":  claims.RegisteredClaims.IssuedAt.Time,
+			"expires_at": claims.RegisteredClaims.ExpiresAt.Time,
 			"issuer":     claims.RegisteredClaims.Issuer,
 		},
 	})

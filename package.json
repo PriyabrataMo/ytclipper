@@ -2,6 +2,7 @@
   "name": "ytclipper",
   "private": true,
   "type": "module",
+  "packageManager": "pnpm@10.12.4",
   "workspaces": [
     "apps/*",
     "packages/*"
