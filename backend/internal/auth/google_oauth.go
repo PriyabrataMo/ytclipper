@@ -276,10 +276,13 @@ func (g *GoogleOAuthService) getFrontendURL() string {
 		origin = "https://app.ytclipper.com"
 	}
 
-	log.Info().Str("origin", origin).Str("env", g.server.Env).Msg("Redirecting to frontend URL")
-	fmt.Printf("🔥🔥🔥🔥🔥🔥Redirecting to frontend URL: %s (env: %s)\n🔥🔥🔥🔥🔥🔥", origin, g.server.Env)
+	// Add callback path and success parameter
+	callbackURL := origin + "/auth/callback?auth=success"
 
-	return origin
+	log.Info().Str("callbackURL", callbackURL).Str("env", g.server.Env).Msg("Redirecting to frontend callback URL")
+	fmt.Printf("🔥🔥🔥🔥🔥🔥Redirecting to frontend callback URL: %s (env: %s)\n🔥🔥🔥🔥🔥🔥", callbackURL, g.server.Env)
+
+	return callbackURL
 }
 
 func (g *GoogleOAuthService) LogoutHandler() gin.HandlerFunc {

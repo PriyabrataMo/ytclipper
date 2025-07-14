@@ -54,14 +54,21 @@ class AuthApiService {
       credentials: 'include', // Include cookies for authentication
     };
 
+    console.log('🔍 Making request to:', url);
+    console.log('🔍 Request config:', config);
+
     const response = await fetch(url, config);
     const responseData = await response.json();
+
+    console.log('🔍 Response status:', response.status);
+    console.log('🔍 Response data:', responseData);
 
     if (!response.ok) {
       const errorMessage =
         responseData.error?.message ||
         responseData.message ||
         `HTTP error! status: ${response.status}`;
+      console.log('❌ Request failed:', errorMessage);
       throw new Error(errorMessage);
     }
 
@@ -75,15 +82,25 @@ class AuthApiService {
   }
 
   async getCurrentUser(): Promise<User | null> {
+    console.log('🔍 Fetching current user...');
+    if (!config.apiUrl) {
+      throw new Error('API URL is not configured');
+    }
+    console.log('🔍 API URL:', config.apiUrl);
+    console.log('🔍 Requesting user data from:', `${this.baseURL}/auth/me`);
+    // Attempt to fetch the current user
+    console.log('🔍 Making request to /auth/me');
     try {
       const response = await this.request<User>('/auth/me');
+      console.log('✅ getCurrentUser success:', response);
       return response;
     } catch (error) {
-      // If not authenticated, return null instead of throwing
+      console.log('❌ getCurrentUser error:', error);
       if (
         error instanceof Error &&
         (error.message.includes('401') || error.message.includes('NO_TOKEN'))
       ) {
+        console.log('🔍 Auth error detected, returning null');
         return null;
       }
       throw error;
@@ -160,11 +177,15 @@ class AuthApiService {
 
   async handleAuthCallback(): Promise<boolean> {
     try {
+      console.log('🔍 Starting auth callback handling...');
       // After OAuth callback, check if user is authenticated
       const user = await this.getCurrentUser();
-      return !!user;
+      console.log('🔍 Auth callback - user data:', user);
+      const isAuthenticated = !!user;
+      console.log('🔍 Auth callback result:', isAuthenticated);
+      return isAuthenticated;
     } catch (error) {
-      console.error('Auth callback error:', error);
+      console.error('❌ Auth callback error:', error);
       return false;
     }
   }

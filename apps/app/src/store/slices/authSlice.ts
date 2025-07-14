@@ -348,10 +348,12 @@ const authSlice = createSlice({
         state.user = action.payload;
         state.isAuthenticated = !!action.payload;
         state.error = null;
+        state.callbackHandled = true;
       })
       .addCase(handleAuthCallback.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.payload as string;
+        state.callbackHandled = true;
       });
   },
 });
