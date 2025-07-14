@@ -130,12 +130,14 @@ jobs:
               echo "port=8080" >> $GITHUB_OUTPUT
               echo "domain=api.ytclipper.com" >> $GITHUB_OUTPUT
               echo "target-dir=/opt/ytclipper/production/backend" >> $GITHUB_OUTPUT
+              echo "env-name=production" >> $GITHUB_OUTPUT
               ;;
             "staging")
               echo "branch=staging" >> $GITHUB_OUTPUT
               echo "port=8081" >> $GITHUB_OUTPUT
               echo "domain=api-staging.ytclipper.com" >> $GITHUB_OUTPUT
               echo "target-dir=/opt/ytclipper/deployments/staging/backend" >> $GITHUB_OUTPUT
+              echo "env-name=staging" >> $GITHUB_OUTPUT
               ;;
             "pr")
               BRANCH="pr-${{ github.event.number }}"
@@ -145,6 +147,7 @@ jobs:
               echo "port=$PORT" >> $GITHUB_OUTPUT
               echo "domain=api-$BRANCH.ytclipper.com" >> $GITHUB_OUTPUT
               echo "target-dir=/opt/ytclipper/deployments/$BRANCH/backend" >> $GITHUB_OUTPUT
+              echo "env-name=staging" >> $GITHUB_OUTPUT
               ;;
           esac
 
@@ -170,7 +173,7 @@ jobs:
 
           # Server configuration
           PORT=8080
-          ENV=production
+          ENV=${{ steps.context.outputs.env-name }}
           LOG_LEVEL=info
           LOG_PRETTY=false
           GIN_MODE=release
@@ -309,7 +312,7 @@ jobs:
               --restart unless-stopped \
               -p "$PORT:8080" \
               --env-file .env \
-              -e ENV="${ENV:-staging}" \
+              -e ENV="$(grep "^ENV=" .env | cut -d'=' -f2)" \
               -e LOG_LEVEL="${LOG_LEVEL:-info}" \
               -e LOG_PRETTY="${LOG_PRETTY:-true}" \
               -e API_TIMEOUT="${API_TIMEOUT:-30s}" \
