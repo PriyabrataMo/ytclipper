@@ -278,6 +278,7 @@ func (g *GoogleOAuthService) getFrontendURL() string {
 
 	log.Info().Str("origin", origin).Str("env", g.server.Env).Msg("Redirecting to frontend URL")
 	fmt.Printf("🔥🔥🔥🔥🔥🔥Redirecting to frontend URL: %s (env: %s)\n🔥🔥🔥🔥🔥🔥", origin, g.server.Env)
+
 	return origin
 }
 
