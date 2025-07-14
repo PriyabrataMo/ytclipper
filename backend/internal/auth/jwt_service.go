@@ -14,8 +14,9 @@ import (
 )
 
 type JWTService struct {
-	config *config.JWTConfig
-	db     *database.Database
+	config     *config.JWTConfig
+	authConfig *config.AuthConfig
+	db         *database.Database
 }
 
 type TokenPair struct {
@@ -40,10 +41,11 @@ type RefreshTokenClaims struct {
 	jwt.RegisteredClaims
 }
 
-func NewJWTService(cfg *config.JWTConfig, db *database.Database) *JWTService {
+func NewJWTService(cfg *config.JWTConfig, authCfg *config.AuthConfig, db *database.Database) *JWTService {
 	return &JWTService{
-		config: cfg,
-		db:     db,
+		config:     cfg,
+		authConfig: authCfg,
+		db:         db,
 	}
 }
 
@@ -176,9 +178,9 @@ func (j *JWTService) SetTokenCookies(c *gin.Context, accessToken, refreshToken s
 		accessToken,
 		int(j.config.AccessTokenExpiry.Seconds()),
 		"/",
-		"",
-		false,
-		true,
+		j.authConfig.CookieDomain,
+		j.authConfig.CookieSecure,
+		j.authConfig.CookieHTTPOnly,
 	)
 
 	c.SetCookie(
@@ -186,13 +188,13 @@ func (j *JWTService) SetTokenCookies(c *gin.Context, accessToken, refreshToken s
 		refreshToken,
 		int(j.config.RefreshTokenExpiry.Seconds()),
 		"/",
-		"",
-		false,
-		true,
+		j.authConfig.CookieDomain,
+		j.authConfig.CookieSecure,
+		j.authConfig.CookieHTTPOnly,
 	)
 }
 
 func (j *JWTService) ClearTokenCookies(c *gin.Context) {
-	c.SetCookie("access_token", "", -1, "/", "", false, true)
-	c.SetCookie("refresh_token", "", -1, "/", "", false, true)
+	c.SetCookie("access_token", "", -1, "/", j.authConfig.CookieDomain, j.authConfig.CookieSecure, j.authConfig.CookieHTTPOnly)
+	c.SetCookie("refresh_token", "", -1, "/", j.authConfig.CookieDomain, j.authConfig.CookieSecure, j.authConfig.CookieHTTPOnly)
 }
