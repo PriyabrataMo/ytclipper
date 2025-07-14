@@ -267,16 +267,17 @@ func (g *GoogleOAuthService) setAuthCookies(c *gin.Context, tokenPair *TokenPair
 func (g *GoogleOAuthService) getFrontendURL() string {
 	var origin string
 
-	if g.server.Env == "development" {
+	switch g.server.Env {
+	case "development":
 		origin = "http://localhost:5173"
-	}
-
-	if g.server.Env == "production" {
+	case "production":
+		origin = "https://app.ytclipper.com"
+	default:
 		origin = "https://app.ytclipper.com"
 	}
 
-	log.Info().Str("origin", origin).Msg("Redirecting to frontend URL")
-	fmt.Printf("🔥🔥🔥🔥🔥🔥Redirecting to frontend URL: %s\n🔥🔥🔥🔥🔥🔥", origin)
+	log.Info().Str("origin", origin).Str("env", g.server.Env).Msg("Redirecting to frontend URL")
+	fmt.Printf("🔥🔥🔥🔥🔥🔥Redirecting to frontend URL: %s (env: %s)\n🔥🔥🔥🔥🔥🔥", origin, g.server.Env)
 	return origin
 }
 
