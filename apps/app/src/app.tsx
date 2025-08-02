@@ -14,6 +14,7 @@ import {
   VideosPage,
 } from '@/pages';
 import { Helmet } from '@dr.pogodin/react-helmet';
+import { EmailVerificationPage } from './pages/email-verification';
 import { GoogleCallback } from './pages/google-callback';
 import { AuthRoutes } from './routes';
 
@@ -89,6 +90,10 @@ const App = () => {
         />
         <Route path='/auth/callback' element={<GoogleCallback />} />
         <Route path='/auth/forgot-password' element={<ForgotPasswordPage />} />
+        <Route
+          path='/auth/email-verification'
+          element={<EmailVerificationPage />}
+        />
 
         <Route
           element={
@@ -99,6 +104,10 @@ const App = () => {
         >
           <Route path='/dashboard' element={<DashboardPage />} />
           <Route path='/profile' element={<ProfilePage />} />
+          <Route
+            path='/email-verification'
+            element={<EmailVerificationPage />}
+          />
           <Route path='/videos' element={<VideosPage />} />
           <Route path='/pricing' element={<PricingPage />} />
           <Route path='/timestamps/:videoId' element={<TimestampsPage />} />

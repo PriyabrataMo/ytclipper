@@ -1,3 +1,9 @@
+import {
+  loginFailure,
+  loginStart,
+  loginSuccess,
+  logout as logoutAction,
+} from '@/store/slices/authSlice';
 import { api } from './api';
 
 import type { AuthMeResponse, UniversalResponse, User } from '@/types';
@@ -30,6 +36,12 @@ export interface AddPasswordRequest {
   password: string;
 }
 
+export type SendOTPRequest = Record<string, never>;
+
+export interface VerifyOTPRequest {
+  otp: string;
+}
+
 export type GoogleLoginResponse = UniversalResponse<{
   auth_url: string;
 }>;
@@ -42,6 +54,18 @@ export const injectedAuthApi = api.injectEndpoints({
         method: 'POST',
         body,
       }),
+      async onQueryStarted(_, { dispatch, queryFulfilled }) {
+        dispatch(loginStart());
+        try {
+          const { data } = await queryFulfilled;
+          dispatch(loginSuccess({ user: data.data }));
+        } catch (error) {
+          const errorMessage =
+            (error as { error?: { data?: { message?: string } } })?.error?.data
+              ?.message || 'Login failed';
+          dispatch(loginFailure(errorMessage));
+        }
+      },
     }),
 
     register: builder.mutation<User, RegisterRequest>({
@@ -61,6 +85,15 @@ export const injectedAuthApi = api.injectEndpoints({
         url: '/auth/logout',
         method: 'POST',
       }),
+      async onQueryStarted(_, { dispatch, queryFulfilled }) {
+        try {
+          await queryFulfilled;
+          dispatch(logoutAction());
+        } catch {
+          // Even if logout fails, we should still clear local state
+          dispatch(logoutAction());
+        }
+      },
     }),
 
     forgotPassword: builder.mutation<void, ForgotPasswordRequest>({
@@ -82,6 +115,27 @@ export const injectedAuthApi = api.injectEndpoints({
     addPassword: builder.mutation<void, AddPasswordRequest>({
       query: (body) => ({
         url: '/auth/add-password',
+        method: 'POST',
+        body,
+      }),
+    }),
+
+    sendOTP: builder.mutation<
+      UniversalResponse<{ message: string }>,
+      SendOTPRequest
+    >({
+      query: () => ({
+        url: '/auth/send-otp',
+        method: 'POST',
+      }),
+    }),
+
+    verifyOTP: builder.mutation<
+      UniversalResponse<{ user: User; message: string }>,
+      VerifyOTPRequest
+    >({
+      query: (body) => ({
+        url: '/auth/verify-otp',
         method: 'POST',
         body,
       }),
@@ -122,6 +176,8 @@ export const {
   useForgotPasswordMutation,
   useResetPasswordMutation,
   useAddPasswordMutation,
+  useSendOTPMutation,
+  useVerifyOTPMutation,
   useGetGoogleLoginUrlQuery,
   useLazyGetGoogleLoginUrlQuery,
   useCheckLoginStatusQuery,

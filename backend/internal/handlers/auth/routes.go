@@ -11,7 +11,6 @@ func SetupAuthRoutes(r *gin.Engine, authHandlers *AuthHandlers, oauthHandlers *O
 		auth.POST("/login", authHandlers.LoginHandler)
 		auth.POST("/forgot-password", authHandlers.ForgotPasswordHandler)
 		auth.POST("/reset-password", authHandlers.ResetPasswordHandler)
-		auth.POST("/verify-email", authHandlers.VerifyEmailHandler)
 		auth.POST("/refresh", authHandlers.RefreshTokenHandler())
 
 		auth.GET("/google/login", oauthHandlers.LoginHandler())
@@ -25,6 +24,9 @@ func SetupAuthRoutes(r *gin.Engine, authHandlers *AuthHandlers, oauthHandlers *O
 			protected.GET("/status", authHandlers.AuthStatusHandler)
 			protected.POST("/add-password", authHandlers.AddPasswordHandler)
 			protected.GET("/access-token", authHandlers.GetAccessToken())
+
+			protected.POST("/send-otp", authHandlers.SendOTPHandler)
+			protected.POST("/verify-otp", authHandlers.VerifyOTPHandler)
 		}
 	}
 }

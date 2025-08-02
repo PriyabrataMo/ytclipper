@@ -16,6 +16,7 @@ export * from './components/aspect-ratio';
 export * from './components/badge';
 export * from './components/dialog';
 export * from './components/input';
+export * from './components/input-otp';
 export * from './components/resizable';
 export * from './components/scroll-area';
 export * from './components/skeleton';

@@ -19,12 +19,15 @@ type User struct {
 	GoogleID string    `bun:"google_id,unique" json:"google_id,omitempty"`
 
 	// Email/password authentication fields
-	Password                string     `bun:"password" json:"-"` // Never include in JSON responses
-	EmailVerified           bool       `bun:"email_verified,default:false" json:"email_verified"`
-	EmailVerificationToken  string     `bun:"email_verification_token" json:"-"`
-	EmailVerificationExpiry *time.Time `bun:"email_verification_expiry" json:"-"`
-	PasswordResetToken      string     `bun:"password_reset_token" json:"-"`
-	PasswordResetExpiry     *time.Time `bun:"password_reset_expiry" json:"-"`
+	Password            string     `bun:"password" json:"-"` // Never include in JSON responses
+	EmailVerified       bool       `bun:"email_verified,default:false" json:"email_verified"`
+	PasswordResetToken  string     `bun:"password_reset_token" json:"-"`
+	PasswordResetExpiry *time.Time `bun:"password_reset_expiry" json:"-"`
+
+	// OTP fields for email verification
+	Otp          string     `bun:"otp" json:"-"`
+	OtpExpiresAt *time.Time `bun:"otp_expires_at" json:"-"`
+	OtpCreatedAt *time.Time `bun:"otp_created_at" json:"-"`
 
 	// OAuth fields (nullable for email/password users)
 	Provider   *string `bun:"provider" json:"provider,omitempty"` // google, github, etc.

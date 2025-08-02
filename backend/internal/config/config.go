@@ -20,6 +20,18 @@ type Config struct {
 	API        APIConfig
 	Monitoring MonitoringConfig
 	OpenAI     OpenAIConfig
+	Email      EmailConfig
+}
+
+type EmailConfig struct {
+	SMTPHost     string
+	SMTPPort     int
+	SMTPUsername string
+	SMTPPassword string
+	FromEmail    string
+	FromName     string
+	UseTLS       bool
+	UseSSL       bool
 }
 
 type OpenAIConfig struct {
@@ -137,6 +149,16 @@ func Load() *Config {
 		OpenAI: OpenAIConfig{
 			APIKey:         getEnv("OPENAI_API_KEY", ""),
 			EmbeddingModel: getEnv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small"),
+		},
+		Email: EmailConfig{
+			SMTPHost:     getEnv("SMTP_HOST", "smtp.gmail.com"),
+			SMTPPort:     getIntEnv("SMTP_PORT", 587),
+			SMTPUsername: getEnv("SMTP_USERNAME", ""),
+			SMTPPassword: getEnv("SMTP_PASSWORD", ""),
+			FromEmail:    getEnv("SMTP_FROM_EMAIL", ""),
+			FromName:     getEnv("SMTP_FROM_NAME", "YT Clipper"),
+			UseTLS:       getBoolEnv("SMTP_USE_TLS", true),
+			UseSSL:       getBoolEnv("SMTP_USE_SSL", false),
 		},
 	}
 }

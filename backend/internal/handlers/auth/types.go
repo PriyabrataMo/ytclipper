@@ -20,12 +20,16 @@ type ResetPasswordRequest struct {
 	Password string `json:"password" binding:"required,min=8"`
 }
 
-type VerifyEmailRequest struct {
-	Token string `json:"token" binding:"required"`
-}
-
 type AddPasswordRequest struct {
 	Password string `json:"password" binding:"required,min=8"`
+}
+
+type SendOTPRequest struct {
+	// No fields needed - email will be taken from authenticated user
+}
+
+type VerifyOTPRequest struct {
+	OTP string `json:"otp" binding:"required,len=6"`
 }
 
 type TokenPair struct {

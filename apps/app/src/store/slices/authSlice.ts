@@ -1,4 +1,3 @@
-import { injectedAuthApi } from '@/services/auth';
 import type { User } from '@/types';
 import { createSlice } from '@reduxjs/toolkit';
 
@@ -31,10 +30,11 @@ const authSlice = createSlice({
       state.user = action.payload.user;
       state.isAuthenticated = true;
     },
-    loginFailure: (state) => {
+    loginFailure: (state, action) => {
       state.isLoading = false;
       state.user = null;
       state.isAuthenticated = false;
+      state.error = action.payload || 'Login failed';
     },
     setUser: (state, action) => {
       const user = action.payload;
@@ -61,36 +61,15 @@ const authSlice = createSlice({
       state.isInitialized = action.payload;
     },
   },
-  extraReducers: (builder) => {
-    builder
-      .addMatcher(injectedAuthApi.endpoints.login.matchPending, (state) => {
-        state.isLoading = true;
-        state.error = null;
-      })
-      .addMatcher(
-        injectedAuthApi.endpoints.login.matchFulfilled,
-        (state, action) => {
-          state.isLoading = false;
-          state.user = action.payload.data;
-          state.isAuthenticated = true;
-        },
-      )
-      .addMatcher(
-        injectedAuthApi.endpoints.login.matchRejected,
-        (state, action) => {
-          state.isLoading = false;
-          state.user = null;
-          state.isAuthenticated = false;
-          state.error = action.error.message || 'Login failed';
-        },
-      )
-      .addMatcher(injectedAuthApi.endpoints.logout.matchFulfilled, (state) => {
-        state.user = null;
-        state.isAuthenticated = false;
-      });
-  },
 });
 
-export const { setUser, logout, setAuthError, setInitialized } =
-  authSlice.actions;
+export const {
+  setUser,
+  logout,
+  setAuthError,
+  setInitialized,
+  loginStart,
+  loginSuccess,
+  loginFailure,
+} = authSlice.actions;
 export default authSlice.reducer;

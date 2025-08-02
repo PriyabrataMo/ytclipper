@@ -158,19 +158,11 @@ func (h *AuthHandlers) RegisterHandler(c *gin.Context) {
 		return
 	}
 
-	verificationToken, err := h.emailService.GenerateToken()
-	if err != nil {
-		middleware.RespondWithError(c, http.StatusInternalServerError, "TOKEN_GENERATION_ERROR", "Failed to generate verification token", err.Error())
-		return
-	}
-
 	user := models.User{
-		Name:                    req.Name,
-		Email:                   req.Email,
-		Password:                hashedPassword,
-		EmailVerified:           false,
-		EmailVerificationToken:  verificationToken,
-		EmailVerificationExpiry: &[]time.Time{h.emailService.GetTokenExpiry()}[0],
+		Name:          req.Name,
+		Email:         req.Email,
+		Password:      hashedPassword,
+		EmailVerified: false,
 	}
 
 	if err := h.db.Create(ctx, &user); err != nil {
@@ -178,16 +170,8 @@ func (h *AuthHandlers) RegisterHandler(c *gin.Context) {
 		return
 	}
 
-	if err := h.emailService.SendVerificationEmail(user.Email, verificationToken); err != nil {
-		middleware.RespondWithOK(c, gin.H{
-			"message": "User created successfully. Please check your email to verify your account.",
-			"user":    user,
-		})
-		return
-	}
-
 	middleware.RespondWithOK(c, gin.H{
-		"message": "User created successfully. Please check your email to verify your account.",
+		"message": "User created successfully. You can now login and verify your email using OTP.",
 		"user":    user,
 	})
 }
@@ -281,22 +265,8 @@ func (h *AuthHandlers) ForgotPasswordHandler(c *gin.Context) {
 		return
 	}
 
-	resetToken, err := h.emailService.GenerateToken()
-	if err != nil {
-		middleware.RespondWithError(c, http.StatusInternalServerError, "TOKEN_GENERATION_ERROR", "Failed to generate reset token", err.Error())
-		return
-	}
-
-	user.PasswordResetToken = resetToken
-	user.PasswordResetExpiry = &[]time.Time{h.emailService.GetTokenExpiry()}[0]
-
 	if err := h.db.Update(ctx, &user); err != nil {
 		middleware.RespondWithError(c, http.StatusInternalServerError, "DB_ERROR", "Failed to save reset token", err.Error())
-		return
-	}
-
-	if err := h.emailService.SendPasswordResetEmail(user.Email, resetToken); err != nil {
-		middleware.RespondWithError(c, http.StatusInternalServerError, "EMAIL_SENDING_ERROR", "Failed to send password reset email", err.Error())
 		return
 	}
 
@@ -346,39 +316,6 @@ func (h *AuthHandlers) ResetPasswordHandler(c *gin.Context) {
 
 	middleware.RespondWithOK(c, gin.H{
 		"message": "Password reset successful. You can now login with your new password.",
-	})
-}
-
-func (h *AuthHandlers) VerifyEmailHandler(c *gin.Context) {
-	var req VerifyEmailRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		middleware.RespondWithError(c, http.StatusBadRequest, "INVALID_REQUEST", "Invalid request payload", err.Error())
-		return
-	}
-
-	ctx := context.Background()
-
-	var user models.User
-	err := h.db.DB.NewSelect().
-		Model(&user).
-		Where("email_verification_token = ? AND email_verification_expiry > ?", req.Token, time.Now()).
-		Scan(ctx)
-	if err != nil {
-		middleware.RespondWithError(c, http.StatusBadRequest, "INVALID_TOKEN", "Invalid or expired verification token", nil)
-		return
-	}
-
-	user.EmailVerified = true
-	user.EmailVerificationToken = ""
-	user.EmailVerificationExpiry = nil
-
-	if err := h.db.Update(ctx, &user); err != nil {
-		middleware.RespondWithError(c, http.StatusInternalServerError, "DB_ERROR", "Failed to update user verification status", err.Error())
-		return
-	}
-
-	middleware.RespondWithOK(c, gin.H{
-		"message": "Email verified successfully. You can now login.",
 	})
 }
 
@@ -493,5 +430,104 @@ func (h *AuthHandlers) AddPasswordHandler(c *gin.Context) {
 
 	middleware.RespondWithOK(c, gin.H{
 		"message": "Password added successfully. You can now login with email and password.",
+	})
+}
+
+func (h *AuthHandlers) SendOTPHandler(c *gin.Context) {
+	authUser, exists := GetUser(c)
+	if !exists {
+		middleware.RespondWithError(c, http.StatusUnauthorized, "UNAUTHORIZED", "User not authenticated", nil)
+		return
+	}
+
+	ctx := context.Background()
+
+	var user models.User
+	err := h.db.DB.NewSelect().
+		Model(&user).
+		Where("id = ?", authUser.ID).
+		Scan(ctx)
+	if err != nil {
+		middleware.RespondWithError(c, http.StatusInternalServerError, "DB_ERROR", "Failed to fetch user", err.Error())
+		return
+	}
+
+	// Check if user is already verified
+	if user.EmailVerified {
+		middleware.RespondWithError(c, http.StatusBadRequest, "ALREADY_VERIFIED", "Email is already verified", nil)
+		return
+	}
+
+	otp, err := h.emailService.GenerateOTP()
+	if err != nil {
+		middleware.RespondWithError(c, http.StatusInternalServerError, "OTP_GENERATION_ERROR", "Failed to generate OTP", err.Error())
+		return
+	}
+
+	otpExpiry := h.emailService.GetOTPExpiry()
+
+	user.Otp = otp
+	user.OtpExpiresAt = &otpExpiry
+	now := time.Now().UTC()
+	user.OtpCreatedAt = &now
+
+	if err := h.db.Update(ctx, &user); err != nil {
+		middleware.RespondWithError(c, http.StatusInternalServerError, "DB_ERROR", "Failed to save OTP", err.Error())
+		return
+	}
+
+	if err := h.emailService.SendOTPEmail(user.Email, otp); err != nil {
+		middleware.RespondWithError(c, http.StatusInternalServerError, "EMAIL_SENDING_ERROR", "Failed to send OTP email", err.Error())
+		return
+	}
+
+	middleware.RespondWithOK(c, gin.H{
+		"message": "OTP sent successfully to your email.",
+	})
+}
+
+func (h *AuthHandlers) VerifyOTPHandler(c *gin.Context) {
+	authUser, exists := GetUser(c)
+	if !exists {
+		middleware.RespondWithError(c, http.StatusUnauthorized, "UNAUTHORIZED", "User not authenticated", nil)
+		return
+	}
+
+	var req VerifyOTPRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		middleware.RespondWithError(c, http.StatusBadRequest, "INVALID_REQUEST", "Invalid request payload", err.Error())
+		return
+	}
+
+	ctx := context.Background()
+
+	var user models.User
+	err := h.db.DB.NewSelect().
+		Model(&user).
+		Where("id = ? AND otp = ? AND otp_expires_at > ?", authUser.ID, req.OTP, time.Now().UTC()).
+		Scan(ctx)
+	if err != nil {
+		middleware.RespondWithError(c, http.StatusBadRequest, "INVALID_OTP", "Invalid or expired OTP", nil)
+		return
+	}
+
+	user.EmailVerified = true
+	user.Otp = ""
+	user.OtpExpiresAt = nil
+	user.OtpCreatedAt = nil
+
+	if err := h.db.Update(ctx, &user); err != nil {
+		middleware.RespondWithError(c, http.StatusInternalServerError, "DB_ERROR", "Failed to update user verification status", err.Error())
+		return
+	}
+
+	middleware.RespondWithOK(c, gin.H{
+		"message": "Email verified successfully. You can now login.",
+		"user": gin.H{
+			"id":             user.ID.String(),
+			"email":          user.Email,
+			"name":           user.Name,
+			"email_verified": user.EmailVerified,
+		},
 	})
 }

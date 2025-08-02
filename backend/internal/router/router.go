@@ -42,7 +42,7 @@ func SetupRouter(db *database.Database, cfg *config.Config) *gin.Engine {
 	r.Use(middleware.RequestLogger())
 
 	jwtService := authhandlers.NewJWTService(&cfg.JWT, &cfg.Auth, db)
-	emailService := authhandlers.NewEmailService()
+	emailService := authhandlers.NewEmailService(&cfg.Email)
 	authMiddleware := authhandlers.NewAuthMiddleware(jwtService, &cfg.Auth, db)
 	authHandlers := authhandlers.NewAuthHandlers(authMiddleware, jwtService, emailService, db)
 	oauthHandlers := authhandlers.NewOAuthHandlers(&cfg.Google, &cfg.Auth, jwtService, db, &cfg.Server)
@@ -99,12 +99,7 @@ func SetupRouter(db *database.Database, cfg *config.Config) *gin.Engine {
 		{
 			timestamps.SetupTimestampRoutes(protected, timestampHandlers, authMiddleware)
 			videos.SetupVideoRoutes(protected, videoHandlers, authMiddleware)
-
-			// Dashboard endpoints
-			protected.GET("/dashboard/most-used-tags", dashboardHandlers.GetMostUsedTags)
-			protected.GET("/dashboard/recent-videos", dashboardHandlers.GetRecentVideos)
-			protected.GET("/dashboard/recent-activity", dashboardHandlers.GetRecentActivity)
-			protected.GET("/dashboard/recent-notes", dashboardHandlers.GetRecentNotes)
+			dashboard.SetupDashboardRoutes(protected, dashboardHandlers, authMiddleware)
 		}
 	}
 

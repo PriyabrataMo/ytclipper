@@ -1,5 +1,4 @@
 export type {
-  DashboardData,
   DashboardStats,
   MostUsedTag,
   RecentActivity,
@@ -14,8 +13,8 @@ export type {
 } from './extension-messaging';
 export {
   getExtensionStatus,
-  syncAuthState,
   syncAuthenticatedUser,
+  syncAuthState,
   syncLogout,
 } from './extension-sync';
 export type { ExtensionSyncResult } from './extension-sync';

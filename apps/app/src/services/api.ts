@@ -1,5 +1,4 @@
 import config from '@/config';
-import { type RootState } from '@/store';
 import {
   createApi,
   fetchBaseQuery,
@@ -7,20 +6,15 @@ import {
   type FetchArgs,
   type FetchBaseQueryError,
 } from '@reduxjs/toolkit/query/react';
-import { logout } from '../store/slices/authSlice';
 
 const API_URL = config.apiUrl;
 
 const baseQuery = fetchBaseQuery({
   baseUrl: `${API_URL}/api/v1`,
   credentials: 'include',
-  prepareHeaders: (headers, { getState }) => {
-    const state = getState() as RootState;
-    const token = state.auth?.token;
-
-    if (token) {
-      headers.set('Authorization', `Bearer ${token}`);
-    }
+  prepareHeaders: (headers, { getState: _getState }) => {
+    // For now, we'll handle auth differently since we don't have a token field
+    // The backend should handle session-based auth with credentials: 'include'
     return headers;
   },
 });
@@ -33,19 +27,19 @@ const baseQueryWithReauth: BaseQueryFn<
   const result = await baseQuery(args, apiCall, extraOptions);
 
   if (result.error && result.error.status === 401) {
-    console.warn('🔄 Reauthenticating due to 401 error');
+    console.warn('🔄 Unauthorized request, redirecting to login');
     try {
-      apiCall.dispatch(logout());
+      apiCall.dispatch({ type: 'auth/logout' });
       if (typeof window !== 'undefined') {
         window.location.href = '/auth';
       }
     } catch (error) {
-      console.error('❌ Reauthentication failed:', error);
-      return result; // Return original error if reauth fails
+      console.error('❌ Auth redirect failed:', error);
+      return result;
     }
   }
 
-  return result; // Return the original result if no error or after reauth
+  return result;
 };
 
 export const api = createApi({

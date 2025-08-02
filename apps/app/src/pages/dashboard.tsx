@@ -1,109 +1,98 @@
 import {
   MostUsedTags,
-  MostUsedTagsLoader,
   RecentActivityList,
-  RecentActivityLoader,
   RecentNotes,
-  RecentNotesLoader,
   RecentVideos,
+  StatsCards,
+} from '@/components/dashboard';
+import {
+  MostUsedTagsLoader,
+  RecentActivityLoader,
+  RecentNotesLoader,
   RecentVideosLoader,
-} from '../components/dashboard';
-import LogoutButton from '../components/logout-button';
+} from '@/components/dashboard/loaders';
 import {
   useGetMostUsedTagsQuery,
   useGetRecentActivityQuery,
   useGetRecentNotesQuery,
   useGetRecentVideosQuery,
-} from '../services/dashboard';
+} from '@/services/dashboard';
+import LogoutButton from '../components/logout-button';
 
-export const DashboardPage = () => {
-  const {
-    data: tagsData,
-    isLoading: tagsLoading,
-    error: _tagsError,
-  } = useGetMostUsedTagsQuery();
-  const {
-    data: videosData,
-    isLoading: videosLoading,
-    error: _videosError,
-  } = useGetRecentVideosQuery();
-  const {
-    data: activityData,
-    isLoading: activityLoading,
-    error: _activityError,
-  } = useGetRecentActivityQuery();
-  const {
-    data: notesData,
-    isLoading: notesLoading,
-    error: _notesError,
-  } = useGetRecentNotesQuery();
+export function DashboardPage() {
+  const { data: tagsData, isLoading: tagsLoading } = useGetMostUsedTagsQuery();
+  const { data: videosData, isLoading: videosLoading } =
+    useGetRecentVideosQuery();
+  const { data: activityData, isLoading: activityLoading } =
+    useGetRecentActivityQuery();
+  const { data: notesData, isLoading: notesLoading } = useGetRecentNotesQuery();
 
+  // Extract available tags from notes for the RecentNotes component
   const allTags = new Set<string>();
-  if (notesData?.success && notesData.data.notes) {
-    notesData.data.notes.forEach((note) => {
+  if (notesData?.notes) {
+    notesData.notes.forEach((note) => {
       note.tags.forEach((tag) => allTags.add(tag));
     });
   }
   const availableTags = Array.from(allTags);
 
   return (
-    <div className='p-4 px-12 space-y-6 w-full'>
-      <div className='flex justify-between items-center'>
-        <h1 className='text-3xl font-bold'>Dashboard</h1>
-        <LogoutButton />
-      </div>
-
-      <div className='flex-1 space-y-6'>
-        <div className='grid grid-cols-1 lg:grid-cols-2 gap-6'>
-          {tagsLoading ? (
-            <MostUsedTagsLoader />
-          ) : tagsData?.success ? (
-            <MostUsedTags tags={tagsData.data.tags} />
-          ) : (
-            <div className='p-4 bg-red-50 border border-red-200 rounded-lg'>
-              <p className='text-red-600 text-sm'>Failed to load tags</p>
+    <div className='min-h-screen bg-orange-50 p-6'>
+      <div className='max-w-7xl mx-auto'>
+        {/* Header */}
+        <div className='flex items-center justify-between mb-8'>
+          <div>
+            <div className='flex items-center gap-3 mb-2'>
+              <div className='w-8 h-8 bg-orange-500 rounded-lg flex items-center justify-center'>
+                <div className='w-3 h-3 bg-white rounded-sm' />
+              </div>
+              <h1 className='text-2xl font-bold text-gray-900'>Dashboard</h1>
             </div>
-          )}
-
-          {activityLoading ? (
-            <RecentActivityLoader />
-          ) : activityData?.success ? (
-            <RecentActivityList activities={activityData.data.activities} />
-          ) : (
-            <div className='p-4 bg-red-50 border border-red-200 rounded-lg'>
-              <p className='text-red-600 text-sm'>Failed to load activity</p>
-            </div>
-          )}
+            <p className='text-gray-600'>
+              Welcome back! Here&apos;s your learning progress.
+            </p>
+          </div>
+          <div className='flex items-center gap-4'>
+            <LogoutButton />
+          </div>
         </div>
 
-        <div className='grid grid-cols-1 lg:grid-cols-3 gap-6'>
-          <div className='lg:col-span-2'>
+        {/* Stats Cards */}
+        <StatsCards />
+
+        {/* Content Grid */}
+        <div className='grid grid-cols-1 lg:grid-cols-2 gap-8'>
+          {/* Left Column */}
+          <div className='space-y-8'>
+            {tagsLoading ? (
+              <MostUsedTagsLoader />
+            ) : (
+              <MostUsedTags tags={tagsData?.tags || []} />
+            )}
             {videosLoading ? (
               <RecentVideosLoader />
-            ) : videosData?.success ? (
-              <RecentVideos videos={videosData.data.videos} />
             ) : (
-              <div className='p-4 bg-red-50 border border-red-200 rounded-lg'>
-                <p className='text-red-600 text-sm'>Failed to load videos</p>
-              </div>
+              <RecentVideos videos={videosData?.videos || []} />
             )}
           </div>
-          <div className='lg:col-span-1'>
+
+          <div className='space-y-8'>
+            {activityLoading ? (
+              <RecentActivityLoader />
+            ) : (
+              <RecentActivityList activities={activityData?.activities || []} />
+            )}
             {notesLoading ? (
               <RecentNotesLoader />
-            ) : notesData?.success ? (
+            ) : (
               <RecentNotes
-                notes={notesData.data.notes}
+                notes={notesData?.notes || []}
                 availableTags={availableTags}
               />
-            ) : (
-              <div className='p-4 bg-red-50 border border-red-200 rounded-lg'>
-                <p className='text-red-600 text-sm'>Failed to load notes</p>
-              </div>
             )}
           </div>
         </div>
       </div>
     </div>
   );
-};
+}

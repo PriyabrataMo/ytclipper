@@ -4,6 +4,7 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
+  toast,
 } from '@ytclipper/ui';
 import {
   CheckCircle2,
@@ -15,26 +16,22 @@ import {
   Zap,
 } from 'lucide-react';
 import { useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { AddPasswordForm } from '../components/auth/AddPasswordForm';
 import LogoutButton from '../components/logout-button';
-import { useGetCurrentUserQuery } from '../services/auth';
+import { ProfileLoader } from '../components/profile/loaders';
+import { useGetCurrentUserQuery, useSendOTPMutation } from '../services/auth';
 
 export const ProfilePage = () => {
   const { data, isLoading, isError } = useGetCurrentUserQuery();
   const [showAddPassword, setShowAddPassword] = useState(false);
-  const [isVerifyingEmail, setIsVerifyingEmail] = useState(false);
   const [isUnsubscribing, setIsUnsubscribing] = useState(false);
+  const navigate = useNavigate();
+
+  const [sendOTP, { isLoading: isSending }] = useSendOTPMutation();
 
   if (isLoading) {
-    return (
-      <div className='min-h-screen bg-gradient-to-br from-orange-50 via-white to-orange-100 flex items-center justify-center'>
-        <div className='text-center'>
-          <div className='w-8 h-8 border-4 border-orange-200 border-t-orange-500 rounded-full animate-spin mx-auto mb-4' />
-          <h1 className='text-2xl font-bold text-gray-900'>Loading...</h1>
-        </div>
-      </div>
-    );
+    return <ProfileLoader />;
   }
 
   if (!data?.success || isError) {
@@ -142,19 +139,6 @@ export const ProfilePage = () => {
     // User data will be automatically refreshed via React Query
   };
 
-  const handleVerifyEmail = async () => {
-    setIsVerifyingEmail(true);
-    try {
-      // TODO: Implement email verification API call
-      await new Promise((resolve) => setTimeout(resolve, 2000));
-      // Show success message
-    } catch {
-      // Show error message
-    } finally {
-      setIsVerifyingEmail(false);
-    }
-  };
-
   const handleUnsubscribe = async () => {
     setIsUnsubscribing(true);
     try {
@@ -165,6 +149,16 @@ export const ProfilePage = () => {
       // Show error message
     } finally {
       setIsUnsubscribing(false);
+    }
+  };
+
+  const handleSendOTP = async () => {
+    try {
+      await sendOTP({}).unwrap();
+      toast.success('Verification code sent to your email');
+      navigate('/email-verification');
+    } catch {
+      toast.error('Failed to send verification code');
     }
   };
 
@@ -245,14 +239,14 @@ export const ProfilePage = () => {
                             </>
                           )}
                         </span>
-                        {!user.email_verified && (
+                        {!user.email_verified && !user.google_id && (
                           <Button
-                            onClick={handleVerifyEmail}
-                            disabled={isVerifyingEmail}
+                            onClick={handleSendOTP}
+                            disabled={isSending}
                             size='sm'
                             className='bg-orange-600 hover:bg-orange-700 text-white'
                           >
-                            {isVerifyingEmail ? 'Sending...' : 'Verify Email'}
+                            Verify Email
                           </Button>
                         )}
                       </div>
