@@ -29,8 +29,7 @@ export const RegisterPage = () => {
 
   const [triggerGetGoogleUrl, { isLoading: _isLoading, error: _error }] =
     useLazyGetGoogleLoginUrlQuery();
-  const [register, { isLoading: isRegistering, error: registerError }] =
-    useRegisterMutation();
+  const [register, { isLoading: isRegistering }] = useRegisterMutation();
 
   const handleGoogleLogin = async () => {
     try {
@@ -116,8 +115,8 @@ export const RegisterPage = () => {
 
       toast('Registration successful!');
       navigate('/auth/login');
-    } catch {
-      const error = registerError as {
+    } catch (err) {
+      const error = err as {
         data?: { error?: { message?: string; details?: string } };
         message?: string;
       };
@@ -151,7 +150,7 @@ export const RegisterPage = () => {
 
   return (
     <Card className='w-full shadow-2xl border-0 bg-white/80 backdrop-blur-sm'>
-      <CardHeader className='space-y-2 pb-4'>
+      <CardHeader className='space-y-2'>
         <div className='flex justify-center mb-3'>
           <div className='w-12 h-12 bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl flex items-center justify-center'>
             <svg
@@ -163,7 +162,7 @@ export const RegisterPage = () => {
             </svg>
           </div>
         </div>
-        <CardTitle className='text-center text-2xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent'>
+        <CardTitle className='text-center text-2xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent mb-0'>
           Create Account
         </CardTitle>
         <p className='text-center text-sm text-gray-600'>
@@ -172,7 +171,7 @@ export const RegisterPage = () => {
       </CardHeader>
 
       <CardContent className='space-y-4'>
-        <form onSubmit={handleSubmit} className='space-y-4'>
+        <form onSubmit={handleSubmit} className='space-y-3'>
           <div className='space-y-2'>
             <label
               htmlFor='name'
@@ -266,39 +265,42 @@ export const RegisterPage = () => {
                 </div>
 
                 {/* Password requirements checklist */}
-                <div className='text-xs text-gray-600 space-y-1'>
-                  <div
-                    className={`flex items-center gap-1 ${formData.password.length >= 8 ? 'text-green-600' : 'text-gray-500'}`}
-                  >
-                    <span>{formData.password.length >= 8 ? '✓' : '○'}</span>
-                    <span>At least 8 characters</span>
-                  </div>
-                  <div
-                    className={`flex items-center gap-1 ${/[A-Z]/.test(formData.password) ? 'text-green-600' : 'text-gray-500'}`}
-                  >
-                    <span>{/[A-Z]/.test(formData.password) ? '✓' : '○'}</span>
-                    <span>One uppercase letter</span>
-                  </div>
-                  <div
-                    className={`flex items-center gap-1 ${/[a-z]/.test(formData.password) ? 'text-green-600' : 'text-gray-500'}`}
-                  >
-                    <span>{/[a-z]/.test(formData.password) ? '✓' : '○'}</span>
-                    <span>One lowercase letter</span>
-                  </div>
-                  <div
-                    className={`flex items-center gap-1 ${/[0-9]/.test(formData.password) ? 'text-green-600' : 'text-gray-500'}`}
-                  >
-                    <span>{/[0-9]/.test(formData.password) ? '✓' : '○'}</span>
-                    <span>One number</span>
-                  </div>
-                  <div
-                    className={`flex items-center gap-1 ${/[^A-Za-z0-9]/.test(formData.password) ? 'text-green-600' : 'text-gray-500'}`}
-                  >
-                    <span>
-                      {/[^A-Za-z0-9]/.test(formData.password) ? '✓' : '○'}
-                    </span>
-                    <span>One special character (!@#$%^&*)</span>
-                  </div>
+                <div className='text-xs text-red-600 space-y-1'>
+                  {[
+                    {
+                      check: formData.password.length >= 8,
+                      text: 'At least 8 characters',
+                      key: 'length',
+                    },
+                    {
+                      check: /[A-Z]/.test(formData.password),
+                      text: 'One uppercase letter',
+                      key: 'uppercase',
+                    },
+                    {
+                      check: /[a-z]/.test(formData.password),
+                      text: 'One lowercase letter',
+                      key: 'lowercase',
+                    },
+                    {
+                      check: /[0-9]/.test(formData.password),
+                      text: 'One number',
+                      key: 'number',
+                    },
+                    {
+                      check: /[^A-Za-z0-9]/.test(formData.password),
+                      text: 'One special character (!@#$%^&*)',
+                      key: 'special',
+                    },
+                  ]
+                    .filter((item) => !item.check)
+                    .slice(0, 1)
+                    .map((item) => (
+                      <div key={item.key} className='flex items-center gap-1'>
+                        <span>○</span>
+                        <span>{item.text}</span>
+                      </div>
+                    ))}
                 </div>
               </div>
             ) : null}

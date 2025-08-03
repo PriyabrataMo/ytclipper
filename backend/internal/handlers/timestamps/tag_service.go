@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/shubhamku044/ytclipper/internal/database"
@@ -38,7 +39,9 @@ func (ts *TagService) FindOrCreateTag(ctx context.Context, tagName string) (*mod
 	}
 
 	newTag := &models.Tag{
-		Name: tagName,
+		Name:      tagName,
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
 	}
 
 	_, err = ts.db.DB.NewInsert().
