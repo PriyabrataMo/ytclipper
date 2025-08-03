@@ -1,4 +1,8 @@
-import { logout as logoutAction } from '@/store/slices/authSlice';
+import {
+  loginFailure,
+  loginSuccess,
+  logout as logoutAction,
+} from '@/store/slices/authSlice';
 import { api } from './api';
 
 import type { AuthMeResponse, UniversalResponse, User } from '@/types';
@@ -49,6 +53,18 @@ export const injectedAuthApi = api.injectEndpoints({
         method: 'POST',
         body,
       }),
+      async onQueryStarted(_, { dispatch, queryFulfilled }) {
+        try {
+          const result = await queryFulfilled;
+          if (result.data.success) {
+            dispatch(loginSuccess({ user: result.data.data }));
+          }
+        } catch (error) {
+          const errorMessage =
+            error instanceof Error ? error.message : 'Login failed';
+          dispatch(loginFailure(errorMessage));
+        }
+      },
     }),
 
     register: builder.mutation<UniversalResponse<User>, RegisterRequest>({

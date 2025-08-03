@@ -5,6 +5,7 @@ export type UniversalResponse<T> = {
   status: number;
 };
 export interface User {
+  status: string;
   id: string;
   email: string;
   name: string;
