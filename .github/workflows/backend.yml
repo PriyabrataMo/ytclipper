@@ -325,8 +325,10 @@ jobs:
             docker run -d \
               --name "$CONTAINER_NAME" \
               --restart unless-stopped \
-              --network host \
               -p "$PORT:8080" \
+              --dns 8.8.8.8 \
+              --dns 8.8.4.4 \
+              --dns 1.1.1.1 \
               --env-file .env \
               -e ENV="$(grep "^ENV=" .env | cut -d'=' -f2)" \
               -e LOG_LEVEL="${LOG_LEVEL:-info}" \
