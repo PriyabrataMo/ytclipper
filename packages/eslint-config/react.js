@@ -63,12 +63,6 @@ export default [
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'error',
 
-      // REACT REFRESH RULES
-      'react-refresh/only-export-components': [
-        'warn',
-        { allowConstantExport: true },
-      ],
-
       // REACT BEST PRACTICES - STRICT
       'react/no-array-index-key': 'error',
       'react/no-children-prop': 'error',
@@ -89,7 +83,6 @@ export default [
 
       // REACT COMPONENT RULES
       'react/destructuring-assignment': ['error', 'always'],
-      'react/hook-use-state': 'error',
       'react/jsx-filename-extension': [
         'error',
         { extensions: ['.tsx', '.jsx'] },

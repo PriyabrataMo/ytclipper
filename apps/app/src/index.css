@@ -228,19 +228,30 @@
   color: hsl(var(--foreground)) !important;
 }
 
-.w-md-editor-text-input {
-  background-color: hsl(var(--background)) !important;
-  color: hsl(var(--foreground)) !important;
-  font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace !important;
+.w-md-editor-text > textarea,
+.w-md-editor-text textarea {
+  -webkit-text-fill-color: #4a5568 !important;
+  color: #4a5568 !important;
+}
+
+.w-md-editor-text > * > textarea {
+  color: #111 !important; /* Visible dark text */
+  background-color: #fff !important; /* White background */
+  font-family: monospace !important;
   font-size: 14px !important;
   line-height: 1.5 !important;
-  padding: 16px !important;
+  padding: 12px !important;
+  box-sizing: border-box !important;
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
+  -webkit-text-fill-color: #111 !important;
 }
 
 .w-md-editor-text-pre {
   font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace !important;
   font-size: 14px !important;
-  line-height: 1.5 !important;
+  line-height: 1 !important;
 }
 
 .w-md-editor-preview {
@@ -344,6 +355,7 @@
 /* Markdown Preview Styles */
 .w-md-editor-preview .wmde-markdown {
   background-color: transparent !important;
+  color: black;
 }
 
 /* Notes panel specific styles */

@@ -4,16 +4,7 @@ export default [
   ...config,
   {
     files: ['**/*.{ts,tsx}'],
-    rules: {
-      // Extension-specific overrides
-      'react-refresh/only-export-components': [
-        'warn',
-        {
-          allowConstantExport: true,
-          allowExportNames: ['createTimestampCollector'],
-        },
-      ],
-    },
+    rules: {},
     languageOptions: {
       globals: {
         chrome: 'readonly',

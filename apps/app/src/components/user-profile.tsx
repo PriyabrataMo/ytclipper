@@ -4,15 +4,14 @@ import { useGetCurrentUserQuery } from '../services/auth';
 
 const UserProfile = () => {
   const { data, isLoading, isError } = useGetCurrentUserQuery();
-  const [extensionStatus, setExtensionStatus] = useState<{
+  // TODO: Remove this once we have a proper extension statuso
+  const [extensionStatus] = useState<{
     available: boolean;
     extensionId: string;
   } | null>(null);
-  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null);
-  const [syncResult, setSyncResult] = useState<'success' | 'error' | null>(
-    null,
-  );
-  const [isSyncing, setIsSyncing] = useState(false);
+  const [lastSyncTime] = useState<Date | null>(null);
+  const [syncResult] = useState<'success' | 'error' | null>(null);
+  const [isSyncing] = useState(false);
 
   // Check extension status and sync auth state
   // useEffect(() => {

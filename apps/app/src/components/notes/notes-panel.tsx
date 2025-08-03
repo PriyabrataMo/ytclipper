@@ -112,6 +112,7 @@ export const NotesPanel = ({
       searchTags({ query: debouncedTagInput });
     }
   }, [debouncedTagInput, searchTags]);
+
   const notes = useMemo(
     () => timestampsData?.data.timestamps || [],
     [timestampsData?.data.timestamps],
@@ -445,7 +446,7 @@ export const NotesPanel = ({
                         </div>
 
                         {showTagSuggestions ? (
-                          <div className='absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto'>
+                          <div className='absolute z-10 w-full mt-1 bg-background border border-gray-300 rounded-lg shadow-lg max-h-48 overflow-y-auto'>
                             {filteredTags.map((tag) => (
                               <button
                                 key={tag.id}
@@ -460,9 +461,9 @@ export const NotesPanel = ({
                                   setTagInput('');
                                   setShowTagSuggestions(false);
                                 }}
-                                className='w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 border-b border-gray-100 last:border-b-0'
+                                className='w-full text-left px-4 p-2 hover:bg-secondary flex items-center gap-3 border-b border-gray-100 last:border-b-0 text-sm'
                               >
-                                <Tag className='h-4 w-4 text-gray-400' />
+                                <Tag className='h-3 w-3 text-gray-400' />
                                 <span className='text-gray-700'>
                                   {tag.name}
                                 </span>
@@ -481,10 +482,12 @@ export const NotesPanel = ({
                                     setNewNote((prev) => ({ ...prev, tags })),
                                   )
                                 }
-                                className='w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 text-orange-600 border-b border-gray-100 last:border-b-0'
+                                className='w-full text-left px-4 py-2 hover:bg-secondary flex items-center text-orange-600 border-b border-gray-100 last:border-b-0 text-sm'
                               >
-                                <Plus className='h-4 w-4' />
-                                <span>Create &ldquo;{tagInput}&rdquo;</span>
+                                <Plus className='h-3 w-3' />
+                                <span className='px-3'>
+                                  Create &ldquo;{tagInput}&rdquo;
+                                </span>
                               </button>
                             ) : null}
                           </div>
@@ -584,7 +587,7 @@ export const NotesPanel = ({
       ) : null}
 
       <div className='flex-1 min-h-0'>
-        <div className='flex-1 h-[calc(100vh-250px)] relative p-4 justify-center w-[100%] overflow-scroll'>
+        <div className='flex-1 h-[calc(100vh-150px)] relative p-4 justify-center w-full overflow-y-auto'>
           {timestampsLoading ? (
             <div className='text-center py-8'>
               <div className='inline-flex items-center justify-center w-12 h-12 bg-gray-100 rounded-full mb-4'>
@@ -684,7 +687,7 @@ export const NotesPanel = ({
                             ) : (
                               <>
                                 <Edit className='h-4 w-4' />
-                                <div className='lg:hidden'>Edit</div>
+                                <div className='md:hidden'>Edit</div>
                               </>
                             )}
                           </Button>
@@ -703,7 +706,7 @@ export const NotesPanel = ({
                             ) : (
                               <>
                                 <Trash2 className='h-4 w-4' />
-                                <div className='lg:hidden'>Delete</div>
+                                <div className='md:hidden'>Delete</div>
                               </>
                             )}
                           </Button>
@@ -903,11 +906,16 @@ export const NotesPanel = ({
                         <button
                           key={tag.id}
                           type='button'
-                          onClick={() =>
-                            addTag(editingNote.tags, (tags) =>
-                              setEditingNote((prev) => ({ ...prev, tags })),
-                            )
-                          }
+                          onClick={() => {
+                            if (!editingNote.tags.includes(tag.name)) {
+                              setEditingNote((prev) => ({
+                                ...prev,
+                                tags: [...prev.tags, tag.name],
+                              }));
+                            }
+                            setTagInput('');
+                            setShowTagSuggestions(false);
+                          }}
                           className='w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 border-b border-gray-100 last:border-b-0'
                         >
                           <Tag className='h-4 w-4 text-gray-400' />

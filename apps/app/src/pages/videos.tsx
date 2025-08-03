@@ -66,6 +66,7 @@ export const VideosPage = () => {
   const navigate = useNavigate();
   const [videoUrl, setVideoUrl] = useState('');
   const [isAddingVideo, setIsAddingVideo] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const reduxVideos = useAppSelector(selectVideos);
   const videos = reduxVideos.length > 0 ? reduxVideos : data?.data.videos || [];
@@ -94,6 +95,12 @@ export const VideosPage = () => {
     }
   };
 
+  const filteredVideos = searchTerm.trim()
+    ? videos.filter((video) =>
+        video.title?.toLowerCase().includes(searchTerm.toLowerCase()),
+      )
+    : videos;
+
   return (
     <div className='p-6 max-w-7xl mx-auto bg-background'>
       <div className='mb-6'>
@@ -112,7 +119,8 @@ export const VideosPage = () => {
               <Input
                 placeholder='Search videos...'
                 className='pl-10 w-64'
-                disabled
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
               />
             </div>
             <Button variant='outline' size='sm'>
@@ -253,7 +261,7 @@ export const VideosPage = () => {
       )}
 
       <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6'>
-        {videos.map((video) => {
+        {filteredVideos.map((video) => {
           const hasDuration = video.duration && video.duration > 0;
           const watchProgress =
             hasDuration && video.duration

@@ -1,6 +1,7 @@
 import { Button } from '@ytclipper/ui';
 import { BarChart3 } from 'lucide-react';
 import { Link, Outlet } from 'react-router';
+import LogoutButton from '../logout-button';
 
 export const AppLayout = () => {
   return (
@@ -29,7 +30,7 @@ export const AppLayout = () => {
             <Link to='/profile' className=''>
               Profile
             </Link>
-            <Button variant='outline'>Logout</Button>
+            <LogoutButton />
           </nav>
         </div>
       </header>

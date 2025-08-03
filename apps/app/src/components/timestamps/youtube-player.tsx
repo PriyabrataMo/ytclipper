@@ -451,11 +451,7 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(
         <div
           className={`relative bg-black rounded-lg overflow-hidden ${className}`}
         >
-          <div
-            ref={containerRef}
-            className='w-full h-full'
-            style={{ minHeight: '200px' }}
-          />
+          <div ref={containerRef} className='w-full h-full min-h-[200px]' />
 
           {!isPlayerReady && !error && (
             <div className='absolute inset-0 flex flex-col items-center justify-center bg-gradient-to-br from-orange-50 to-orange-100'>

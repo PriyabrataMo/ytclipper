@@ -39,8 +39,8 @@ export const syncAuthenticatedUser = async (
         name: user.name || '',
         createdAt: user.created_at,
       },
-      user.token || undefined,
-      user.token_expiry || undefined,
+      undefined,
+      undefined,
     );
 
     return {
