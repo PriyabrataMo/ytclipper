@@ -1,6 +1,7 @@
 import {
   useLazyGetGoogleLoginUrlQuery,
   useLoginMutation,
+  useRegisterMutation,
 } from '@/services/auth';
 import {
   Button,
@@ -8,6 +9,7 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
+  toast,
 } from '@ytclipper/ui';
 import { AlertCircle, CheckCircle2, Eye, EyeOff } from 'lucide-react';
 import { useState } from 'react';
@@ -32,6 +34,8 @@ export const LoginPage = () => {
     useLazyGetGoogleLoginUrlQuery();
   const [login, { isLoading: isLoggingIn, error: loginError }] =
     useLoginMutation();
+  const [register, { isLoading: isRegistering, error: registerError }] =
+    useRegisterMutation();
 
   const handleGoogleLogin = async () => {
     try {
@@ -96,27 +100,66 @@ export const LoginPage = () => {
     // Validation for signup mode
     if (!isLoginMode) {
       if (formData.password !== formData.confirmPassword) {
-        // Handle password mismatch error
+        toast('Passwords do not match', {
+          description: 'Please make sure both passwords are identical.',
+        });
         return;
       }
-      if (passwordStrength < 3) {
-        // Handle weak password error
+      if (passwordStrength < 5) {
+        toast('Password is too weak. Please choose a stronger password.', {
+          description:
+            'Include uppercase, lowercase, numbers, and special characters.',
+        });
         return;
       }
     }
 
     try {
-      const response = await login({
-        email: formData.email,
-        password: formData.password,
-      });
-      console.log('Login response:', response);
-      if (response?.data?.success) {
-        console.log('Login successful, redirecting to:', from);
-        navigate(from, { replace: true });
+      if (isLoginMode) {
+        const response = await login({
+          email: formData.email,
+          password: formData.password,
+        });
+        console.log('Login response:', response);
+        if (response?.data?.success) {
+          console.log('Login successful, redirecting to:', from);
+          navigate(from, { replace: true });
+        }
+      } else {
+        // Registration mode
+        await register({
+          name: formData.name,
+          email: formData.email,
+          password: formData.password,
+        }).unwrap();
+
+        toast('Registration successful!');
+
+        // Switch to login mode
+        setIsLoginMode(true);
+        setFormData({
+          name: '',
+          email: formData.email, // Keep the email for convenience
+          password: '',
+          confirmPassword: '',
+        });
+        setPasswordStrength(0);
       }
     } catch (error) {
-      console.error('Error logging in:', error);
+      console.error('Error:', error);
+      const err = error as {
+        data?: { error?: { message?: string; details?: string } };
+        message?: string;
+      };
+      const errorMessage =
+        err?.data?.error?.message ||
+        err?.data?.error?.details ||
+        err?.message ||
+        (isLoginMode ? 'Login failed' : 'Registration failed');
+
+      toast(errorMessage, {
+        description: 'Please try again.',
+      });
     }
   };
 
@@ -133,7 +176,7 @@ export const LoginPage = () => {
     }
   };
 
-  const currentlyLoading = isLoading || isLoggingIn;
+  const currentlyLoading = isLoading || isLoggingIn || isRegistering;
   const passwordsMatch = formData.password === formData.confirmPassword;
 
   return (
@@ -170,10 +213,14 @@ export const LoginPage = () => {
 
         <CardContent className='space-y-6'>
           {/* Error Display */}
-          {error || loginError ? (
+          {error || loginError || registerError ? (
             <div className='flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm'>
               <AlertCircle className='w-4 h-4 flex-shrink-0' />
-              <span>Authentication failed. Please try again.</span>
+              <span>
+                {isLoginMode
+                  ? 'Login failed. Please try again.'
+                  : 'Registration failed. Please try again.'}
+              </span>
             </div>
           ) : null}
 
@@ -271,6 +318,41 @@ export const LoginPage = () => {
                       {getPasswordStrengthText(passwordStrength)}
                     </span>
                   </div>
+
+                  <div className='text-xs text-gray-600 space-y-1'>
+                    <div
+                      className={`flex items-center gap-1 ${formData.password.length >= 8 ? 'text-green-600' : 'text-gray-500'}`}
+                    >
+                      <span>{formData.password.length >= 8 ? '✓' : '○'}</span>
+                      <span>At least 8 characters</span>
+                    </div>
+                    <div
+                      className={`flex items-center gap-1 ${/[A-Z]/.test(formData.password) ? 'text-green-600' : 'text-gray-500'}`}
+                    >
+                      <span>{/[A-Z]/.test(formData.password) ? '✓' : '○'}</span>
+                      <span>One uppercase letter</span>
+                    </div>
+                    <div
+                      className={`flex items-center gap-1 ${/[a-z]/.test(formData.password) ? 'text-green-600' : 'text-gray-500'}`}
+                    >
+                      <span>{/[a-z]/.test(formData.password) ? '✓' : '○'}</span>
+                      <span>One lowercase letter</span>
+                    </div>
+                    <div
+                      className={`flex items-center gap-1 ${/[0-9]/.test(formData.password) ? 'text-green-600' : 'text-gray-500'}`}
+                    >
+                      <span>{/[0-9]/.test(formData.password) ? '✓' : '○'}</span>
+                      <span>One number</span>
+                    </div>
+                    <div
+                      className={`flex items-center gap-1 ${/[^A-Za-z0-9]/.test(formData.password) ? 'text-green-600' : 'text-gray-500'}`}
+                    >
+                      <span>
+                        {/[^A-Za-z0-9]/.test(formData.password) ? '✓' : '○'}
+                      </span>
+                      <span>One special character (!@#$%^&*)</span>
+                    </div>
+                  </div>
                 </div>
               ) : null}
             </div>
@@ -343,7 +425,7 @@ export const LoginPage = () => {
               type='submit'
               disabled={
                 currentlyLoading ||
-                (!isLoginMode && (!passwordsMatch || passwordStrength < 3))
+                (!isLoginMode && (!passwordsMatch || passwordStrength < 5))
               }
               className='w-full bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white py-3 rounded-xl font-semibold transition-all duration-200 transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none'
             >

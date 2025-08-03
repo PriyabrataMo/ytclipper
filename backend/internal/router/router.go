@@ -58,6 +58,7 @@ func SetupRouter(db *database.Database, cfg *config.Config) *gin.Engine {
 
 	r.GET("/health", handlers.HealthCheck)
 	r.GET("/db-health", handlers.DBHealthCheck(db))
+	r.GET("/dns-debug", handlers.DNSDebugHandler)
 
 	authhandlers.SetupAuthRoutes(r, authHandlers, oauthHandlers, authMiddleware)
 
@@ -93,6 +94,7 @@ func SetupRouter(db *database.Database, cfg *config.Config) *gin.Engine {
 
 		v1.GET("/health", handlers.HealthCheck)
 		v1.GET("/db-health", handlers.DBHealthCheck(db))
+		v1.GET("/dns-debug", handlers.DNSDebugHandler)
 
 		protected := v1.Group("")
 		protected.Use(authMiddleware.RequireAuth())

@@ -159,7 +159,61 @@ jobs:
 
             # Clean up unused Docker images
             echo "🧹 Cleaning up unused Docker images..."
-            docker image prune -af --filter "label=org.opencontainers.image.ref.name=*$BRANCH*" || true
+
+            # Remove specific PR images by tag
+            echo "🔍 Looking for images with tag: $BRANCH"
+            PR_IMAGES=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep "$BRANCH" || true)
+            if [ -n "$PR_IMAGES" ]; then
+              echo "🗑️  Removing PR images:"
+              echo "$PR_IMAGES" | while read -r image; do
+                echo "  - $image"
+                docker rmi -f "$image" || true
+              done
+            else
+              echo "ℹ️  No PR-specific images found with tag: $BRANCH"
+            fi
+
+            # Remove images by repository pattern
+            echo "🔍 Looking for images from repository: ghcr.io/priyabratamo/ytclipper"
+            REPO_IMAGES=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep "ghcr.io/priyabratamo/ytclipper" | grep "$BRANCH" || true)
+            if [ -n "$REPO_IMAGES" ]; then
+              echo "🗑️  Removing repository images:"
+              echo "$REPO_IMAGES" | while read -r image; do
+                echo "  - $image"
+                docker rmi -f "$image" || true
+              done
+            else
+              echo "ℹ️  No repository images found for: $BRANCH"
+            fi
+
+            # General cleanup of dangling images
+            echo "🧹 Cleaning up dangling images..."
+            docker image prune -af || true
+
+            # Clean up unused networks
+            echo "🌐 Cleaning up unused networks..."
+            docker network prune -f || true
+
+            # Clean up unused volumes (optional - be careful with this)
+            echo "💾 Cleaning up unused volumes..."
+            docker volume prune -f || true
+
+            # Additional cleanup: Remove any images with PR number in name
+            echo "🔍 Looking for images with PR number: $PR_NUMBER"
+            PR_NUMBER_IMAGES=$(docker images --format "{{.Repository}}:{{.Tag}}" | grep "$PR_NUMBER" || true)
+            if [ -n "$PR_NUMBER_IMAGES" ]; then
+              echo "🗑️  Removing images with PR number:"
+              echo "$PR_NUMBER_IMAGES" | while read -r image; do
+                echo "  - $image"
+                docker rmi -f "$image" || true
+              done
+            else
+              echo "ℹ️  No images found with PR number: $PR_NUMBER"
+            fi
+
+            # Show remaining images for debugging
+            echo "📊 Remaining Docker images:"
+            docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}" | head -10
 
             echo "✅ VPS cleanup completed for PR #$PR_NUMBER"
             echo "📊 Summary:"

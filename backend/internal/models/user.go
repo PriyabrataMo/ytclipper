@@ -16,7 +16,7 @@ type User struct {
 	Email    string    `bun:"email,unique,notnull" json:"email"`
 	Name     string    `bun:"name" json:"name"`
 	Picture  string    `bun:"picture" json:"picture"`
-	GoogleID string    `bun:"google_id,unique" json:"google_id,omitempty"`
+	GoogleID *string   `bun:"google_id" json:"google_id,omitempty"`
 
 	// Email/password authentication fields
 	Password            string     `bun:"password" json:"-"` // Never include in JSON responses

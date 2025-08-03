@@ -68,7 +68,7 @@ export const injectedAuthApi = api.injectEndpoints({
       },
     }),
 
-    register: builder.mutation<User, RegisterRequest>({
+    register: builder.mutation<UniversalResponse<User>, RegisterRequest>({
       query: (body) => ({
         url: '/auth/register',
         method: 'POST',

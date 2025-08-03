@@ -25,7 +25,15 @@ createRoot(rootElement).render(
         <HelmetProvider>
           <BrowserRouter>
             <App />
-            <Toaster />
+            <Toaster
+              position='bottom-left'
+              toastOptions={{
+                classNames: {
+                  toast: 'bg-orange-500 text-black',
+                },
+              }}
+              richColors
+            />
           </BrowserRouter>
         </HelmetProvider>
       </PersistGate>

@@ -55,7 +55,7 @@ func (h *AuthHandlers) GetCurrentUserHandler() gin.HandlerFunc {
 		}
 
 		authMethods := []string{}
-		if user.GoogleID != "" {
+		if user.GoogleID != nil && *user.GoogleID != "" {
 			authMethods = append(authMethods, "google")
 		}
 		if user.Password != "" {
@@ -224,7 +224,7 @@ func (h *AuthHandlers) LoginHandler(c *gin.Context) {
 	h.jwtService.SetTokenCookies(c, accessToken, refreshToken)
 
 	authMethods := []string{}
-	if user.GoogleID != "" {
+	if user.GoogleID != nil && *user.GoogleID != "" {
 		authMethods = append(authMethods, "google")
 	}
 	if user.Password != "" {
@@ -372,7 +372,7 @@ func (h *AuthHandlers) DebugUserHandler(c *gin.Context) {
 			"email":          user.Email,
 			"name":           user.Name,
 			"has_password":   user.Password != "",
-			"has_google_id":  user.GoogleID != "",
+			"has_google_id":  user.GoogleID != nil && *user.GoogleID != "",
 			"email_verified": user.EmailVerified,
 			"created_at":     user.CreatedAt,
 			"updated_at":     user.UpdatedAt,

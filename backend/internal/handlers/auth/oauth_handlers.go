@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"time"
 
@@ -55,6 +56,27 @@ func (h *OAuthHandlers) CallbackHandler() gin.HandlerFunc {
 			return
 		}
 
+		log.Info().Str("redirect_uri", h.googleConfig.RedirectURL).Msg("Using redirect URI for token exchange")
+
+		log.Info().Msg("Testing DNS resolution for oauth2.googleapis.com")
+
+		// Test basic connectivity first
+		log.Info().Msg("Testing basic internet connectivity")
+		_, err := net.DialTimeout("tcp", "8.8.8.8:53", 5*time.Second)
+		if err != nil {
+			log.Error().Err(err).Msg("Cannot reach Google DNS server")
+		} else {
+			log.Info().Msg("Can reach Google DNS server")
+		}
+
+		// Test DNS resolution
+		_, err = net.LookupHost("oauth2.googleapis.com")
+		if err != nil {
+			log.Error().Err(err).Msg("DNS resolution failed for oauth2.googleapis.com")
+		} else {
+			log.Info().Msg("DNS resolution successful for oauth2.googleapis.com")
+		}
+
 		tokenURL := "https://oauth2.googleapis.com/token"
 		tokenData := map[string]string{
 			"client_id":     h.googleConfig.ClientID,
@@ -64,9 +86,14 @@ func (h *OAuthHandlers) CallbackHandler() gin.HandlerFunc {
 			"redirect_uri":  h.googleConfig.RedirectURL,
 		}
 
-		tokenResp, err := http.PostForm(tokenURL, mapToValues(tokenData))
+		// Create HTTP client with timeout
+		client := &http.Client{
+			Timeout: 30 * time.Second,
+		}
+
+		tokenResp, err := client.PostForm(tokenURL, mapToValues(tokenData))
 		if err != nil {
-			log.Error().Err(err).Msg("Failed to exchange code for token")
+			log.Error().Err(err).Str("token_url", tokenURL).Msg("Failed to exchange code for token")
 			middleware.RespondWithError(c, http.StatusInternalServerError, "TOKEN_EXCHANGE_ERROR", "Failed to exchange authorization code", nil)
 			return
 		}
@@ -95,7 +122,6 @@ func (h *OAuthHandlers) CallbackHandler() gin.HandlerFunc {
 		}
 
 		req.Header.Set("Authorization", "Bearer "+accessToken)
-		client := &http.Client{}
 		userInfoResp, err := client.Do(req)
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to get user info")
@@ -122,7 +148,7 @@ func (h *OAuthHandlers) CallbackHandler() gin.HandlerFunc {
 			user = models.User{
 				Email:         googleUser.Email,
 				Name:          googleUser.Name,
-				GoogleID:      googleUser.ID,
+				GoogleID:      &googleUser.ID,
 				EmailVerified: googleUser.VerifiedEmail,
 				CreatedAt:     time.Now().UTC(),
 				UpdatedAt:     time.Now().UTC(),
@@ -134,8 +160,9 @@ func (h *OAuthHandlers) CallbackHandler() gin.HandlerFunc {
 				return
 			}
 		} else {
-			if user.GoogleID == "" {
-				user.GoogleID = googleUser.ID
+			if user.GoogleID == nil || *user.GoogleID == "" {
+				googleID := googleUser.ID
+				user.GoogleID = &googleID
 				user.UpdatedAt = time.Now().UTC()
 				if err := h.db.Update(ctx, &user); err != nil {
 					log.Error().Err(err).Msg("Failed to update user with Google ID")

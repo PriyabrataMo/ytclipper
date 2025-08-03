@@ -5,6 +5,15 @@ services:
     restart: unless-stopped
     ports:
       - "${BACKEND_PORT:-8080}:8080"
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+      - 1.1.1.1
+    dns_opt:
+      - timeout:3
+      - attempts:2
+    # Uncomment the line below if DNS issues persist
+    # network_mode: "host"
     env_file:
       - .env
     environment:

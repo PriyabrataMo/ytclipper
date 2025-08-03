@@ -1,19 +1,25 @@
-import { useLazyGetGoogleLoginUrlQuery } from '@/services/auth';
+import {
+  useLazyGetGoogleLoginUrlQuery,
+  useRegisterMutation,
+} from '@/services/auth';
 import {
   Button,
   Card,
   CardContent,
   CardHeader,
   CardTitle,
+  toast,
 } from '@ytclipper/ui';
 import { AlertCircle, CheckCircle2, Eye, EyeOff } from 'lucide-react';
 import { useState } from 'react';
-import { Link } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 
 export const RegisterPage = () => {
+  const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordStrength, setPasswordStrength] = useState(0);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -21,8 +27,10 @@ export const RegisterPage = () => {
     confirmPassword: '',
   });
 
-  const [triggerGetGoogleUrl, { isLoading, error }] =
+  const [triggerGetGoogleUrl, { isLoading: _isLoading, error: _error }] =
     useLazyGetGoogleLoginUrlQuery();
+  const [register, { isLoading: isRegistering, error: registerError }] =
+    useRegisterMutation();
 
   const handleGoogleLogin = async () => {
     try {
@@ -84,11 +92,46 @@ export const RegisterPage = () => {
     e.preventDefault();
 
     if (formData.password !== formData.confirmPassword) {
-      // Handle password mismatch error
+      toast('Passwords do not match', {
+        description: 'Please try again.',
+      });
       return;
     }
-    if (passwordStrength < 3) {
-      // Handle weak password error
+    if (passwordStrength < 5) {
+      toast('Password is too weak. Please choose a stronger password.', {
+        description:
+          'Include uppercase, lowercase, numbers, and special characters.',
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      await register({
+        name: formData.name,
+        email: formData.email,
+        password: formData.password,
+      }).unwrap();
+
+      toast('Registration successful!');
+      navigate('/auth/login');
+    } catch {
+      const error = registerError as {
+        data?: { error?: { message?: string; details?: string } };
+        message?: string;
+      };
+      console.log('error', error.data);
+      const errorMessage =
+        error?.data?.error?.message ||
+        error?.data?.error?.details ||
+        error?.message ||
+        'Registration failed';
+      toast(errorMessage, {
+        description: error?.data?.error?.details,
+      });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -99,13 +142,11 @@ export const RegisterPage = () => {
       [name]: value,
     });
 
-    // Calculate password strength for signup mode
     if (name === 'password') {
       setPasswordStrength(calculatePasswordStrength(value));
     }
   };
 
-  const currentlyLoading = isLoading;
   const passwordsMatch = formData.password === formData.confirmPassword;
 
   return (
@@ -131,13 +172,6 @@ export const RegisterPage = () => {
       </CardHeader>
 
       <CardContent className='space-y-4'>
-        {error ? (
-          <div className='flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm'>
-            <AlertCircle className='w-4 h-4 flex-shrink-0' />
-            <span>Authentication failed. Please try again.</span>
-          </div>
-        ) : null}
-
         <form onSubmit={handleSubmit} className='space-y-4'>
           <div className='space-y-2'>
             <label
@@ -210,7 +244,7 @@ export const RegisterPage = () => {
 
             {/* Password strength indicator for signup */}
             {formData.password ? (
-              <div className='space-y-1'>
+              <div className='space-y-2'>
                 <div className='flex items-center gap-2'>
                   <div className='flex-1 h-2 bg-gray-200 rounded-full overflow-hidden'>
                     <div
@@ -229,6 +263,42 @@ export const RegisterPage = () => {
                   >
                     {getPasswordStrengthText(passwordStrength)}
                   </span>
+                </div>
+
+                {/* Password requirements checklist */}
+                <div className='text-xs text-gray-600 space-y-1'>
+                  <div
+                    className={`flex items-center gap-1 ${formData.password.length >= 8 ? 'text-green-600' : 'text-gray-500'}`}
+                  >
+                    <span>{formData.password.length >= 8 ? '✓' : '○'}</span>
+                    <span>At least 8 characters</span>
+                  </div>
+                  <div
+                    className={`flex items-center gap-1 ${/[A-Z]/.test(formData.password) ? 'text-green-600' : 'text-gray-500'}`}
+                  >
+                    <span>{/[A-Z]/.test(formData.password) ? '✓' : '○'}</span>
+                    <span>One uppercase letter</span>
+                  </div>
+                  <div
+                    className={`flex items-center gap-1 ${/[a-z]/.test(formData.password) ? 'text-green-600' : 'text-gray-500'}`}
+                  >
+                    <span>{/[a-z]/.test(formData.password) ? '✓' : '○'}</span>
+                    <span>One lowercase letter</span>
+                  </div>
+                  <div
+                    className={`flex items-center gap-1 ${/[0-9]/.test(formData.password) ? 'text-green-600' : 'text-gray-500'}`}
+                  >
+                    <span>{/[0-9]/.test(formData.password) ? '✓' : '○'}</span>
+                    <span>One number</span>
+                  </div>
+                  <div
+                    className={`flex items-center gap-1 ${/[^A-Za-z0-9]/.test(formData.password) ? 'text-green-600' : 'text-gray-500'}`}
+                  >
+                    <span>
+                      {/[^A-Za-z0-9]/.test(formData.password) ? '✓' : '○'}
+                    </span>
+                    <span>One special character (!@#$%^&*)</span>
+                  </div>
                 </div>
               </div>
             ) : null}
@@ -287,11 +357,14 @@ export const RegisterPage = () => {
           <Button
             type='submit'
             disabled={
-              currentlyLoading || !passwordsMatch || passwordStrength < 3
+              isSubmitting ||
+              isRegistering ||
+              !passwordsMatch ||
+              passwordStrength < 5
             }
             className='w-full bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white py-2.5 rounded-lg font-semibold transition-all duration-200 transform hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none'
           >
-            {currentlyLoading ? (
+            {isSubmitting || isRegistering ? (
               <div className='flex items-center gap-2'>
                 <div className='w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin' />
                 Processing...
@@ -315,7 +388,7 @@ export const RegisterPage = () => {
 
         <Button
           onClick={handleGoogleLogin}
-          disabled={currentlyLoading}
+          disabled={_isLoading || isRegistering}
           variant='outline'
           className='w-full py-2.5 rounded-lg border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all duration-200 transform hover:scale-[1.02] disabled:transform-none'
         >
