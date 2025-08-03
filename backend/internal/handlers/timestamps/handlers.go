@@ -153,6 +153,8 @@ func (t *TimestampsHandlers) CreateTimestamp(c *gin.Context) {
 		Title:     req.Title,
 		Note:      req.Note,
 		Timestamp: req.Timestamp,
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
 	}
 
 	if err := t.db.CreateWithTx(ctx, tx, &timestamp); err != nil {
