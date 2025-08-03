@@ -12,8 +12,8 @@ services:
     dns_opt:
       - timeout:3
       - attempts:2
-    # Uncomment the line below if DNS issues persist
-    # network_mode: "host"
+    # Enable host network mode to fix DNS and network connectivity issues
+    network_mode: "host"
     env_file:
       - .env
     environment:

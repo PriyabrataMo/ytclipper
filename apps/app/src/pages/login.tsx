@@ -3,6 +3,12 @@ import {
   useLoginMutation,
   useRegisterMutation,
 } from '@/services/auth';
+import { useAppDispatch } from '@/store/hooks';
+import {
+  loginFailure,
+  loginStart,
+  loginSuccess,
+} from '@/store/slices/authSlice';
 import {
   Button,
   Card,
@@ -17,6 +23,7 @@ import { useLocation, useNavigate } from 'react-router';
 
 export const LoginPage = () => {
   const navigate = useNavigate();
+  const dispatch = useAppDispatch();
   const location = useLocation();
   const [isLoginMode, setIsLoginMode] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
@@ -53,7 +60,6 @@ export const LoginPage = () => {
     }
   };
 
-  // Password strength calculation
   const calculatePasswordStrength = (password: string) => {
     let strength = 0;
     if (password.length >= 8) {
@@ -97,7 +103,6 @@ export const LoginPage = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validation for signup mode
     if (!isLoginMode) {
       if (formData.password !== formData.confirmPassword) {
         toast('Passwords do not match', {
@@ -116,17 +121,17 @@ export const LoginPage = () => {
 
     try {
       if (isLoginMode) {
+        dispatch(loginStart());
+
         const response = await login({
           email: formData.email,
           password: formData.password,
-        });
-        console.log('Login response:', response);
-        if (response?.data?.success) {
-          console.log('Login successful, redirecting to:', from);
-          navigate(from, { replace: true });
-        }
+        }).unwrap();
+
+        dispatch(loginSuccess({ user: response.data }));
+        console.log('Login successful, redirecting to:', from);
+        navigate(from, { replace: true });
       } else {
-        // Registration mode
         await register({
           name: formData.name,
           email: formData.email,
@@ -135,11 +140,10 @@ export const LoginPage = () => {
 
         toast('Registration successful!');
 
-        // Switch to login mode
         setIsLoginMode(true);
         setFormData({
           name: '',
-          email: formData.email, // Keep the email for convenience
+          email: formData.email,
           password: '',
           confirmPassword: '',
         });
@@ -147,19 +151,70 @@ export const LoginPage = () => {
       }
     } catch (error) {
       console.error('Error:', error);
-      const err = error as {
-        data?: { error?: { message?: string; details?: string } };
-        message?: string;
-      };
-      const errorMessage =
-        err?.data?.error?.message ||
-        err?.data?.error?.details ||
-        err?.message ||
-        (isLoginMode ? 'Login failed' : 'Registration failed');
 
-      toast(errorMessage, {
-        description: 'Please try again.',
-      });
+      if (isLoginMode) {
+        dispatch(loginFailure('Login failed'));
+
+        if (loginError) {
+          const errorData = loginError as {
+            data?: { error?: { message?: string; details?: string } };
+            message?: string;
+          };
+          const errorMessage =
+            errorData?.data?.error?.message ||
+            errorData?.data?.error?.details ||
+            errorData?.message ||
+            'Login failed. Please check your credentials.';
+          toast(errorMessage, {
+            description: 'Please try again.',
+          });
+        } else {
+          const err = error as {
+            data?: { error?: { message?: string; details?: string } };
+            message?: string;
+            status?: number;
+          };
+
+          const errorMessage =
+            err?.data?.error?.message ||
+            err?.data?.error?.details ||
+            err?.message ||
+            'Login failed. Please check your credentials.';
+
+          toast(errorMessage, {
+            description: 'Please try again.',
+          });
+        }
+      } else if (registerError) {
+        const errorData = registerError as {
+          data?: { error?: { message?: string; details?: string } };
+          message?: string;
+        };
+        const errorMessage =
+          errorData?.data?.error?.message ||
+          errorData?.data?.error?.details ||
+          errorData?.message ||
+          'Registration failed';
+        toast(errorMessage, {
+          description: 'Please try again.',
+        });
+      } else {
+        const err = error as {
+          data?: { error?: { message?: string; details?: string } };
+          message?: string;
+          status?: number;
+        };
+
+        const errorMessage =
+          err?.data?.error?.message ||
+          err?.data?.error?.details ||
+          err?.message ||
+          'Registration failed';
+
+        toast(errorMessage, {
+          description: 'Please try again.',
+        });
+      }
     }
   };
 
@@ -170,7 +225,6 @@ export const LoginPage = () => {
       [name]: value,
     });
 
-    // Calculate password strength for signup mode
     if (name === 'password' && !isLoginMode) {
       setPasswordStrength(calculatePasswordStrength(value));
     }
@@ -181,7 +235,6 @@ export const LoginPage = () => {
 
   return (
     <div className='min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-orange-50 via-white to-orange-100 relative overflow-hidden'>
-      {/* Background decorative elements */}
       <div className='absolute inset-0 overflow-hidden pointer-events-none'>
         <div className='absolute -top-40 -right-40 w-80 h-80 bg-orange-400/10 rounded-full blur-3xl' />
         <div className='absolute -bottom-40 -left-40 w-80 h-80 bg-orange-400/10 rounded-full blur-3xl' />
@@ -212,7 +265,6 @@ export const LoginPage = () => {
         </CardHeader>
 
         <CardContent className='space-y-6'>
-          {/* Error Display */}
           {error || loginError || registerError ? (
             <div className='flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm'>
               <AlertCircle className='w-4 h-4 flex-shrink-0' />
@@ -296,7 +348,6 @@ export const LoginPage = () => {
                 </button>
               </div>
 
-              {/* Password strength indicator for signup */}
               {!isLoginMode && formData.password ? (
                 <div className='space-y-2'>
                   <div className='flex items-center gap-2'>
