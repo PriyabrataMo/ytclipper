@@ -66,13 +66,13 @@ func (s *SubscriptionService) CreateSubscription(ctx context.Context, userID uui
 	}
 
 	subscription := &models.Subscription{
-		UserID:               userID,
-		PlanType:             planType,
-		Status:               "active",
-		StripeSubscriptionID: stripeSubscriptionID,
-		StripeCustomerID:     stripeCustomerID,
-		CurrentPeriodStart:   &now,
-		CurrentPeriodEnd:     &periodEnd,
+		UserID:   userID,
+		PlanType: planType,
+		Status:   "active",
+		// StripeSubscriptionID: stripeSubscriptionID,
+		// StripeCustomerID:     stripeCustomerID,
+		CurrentPeriodStart: &now,
+		CurrentPeriodEnd:   &periodEnd,
 	}
 
 	if err := s.DB.Create(ctx, subscription); err != nil {
