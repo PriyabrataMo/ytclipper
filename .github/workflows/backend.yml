@@ -204,6 +204,21 @@ jobs:
           # API configuration
           API_TIMEOUT=30s
           API_RATE_LIMIT=100
+
+          # OpenAI configuration
+          OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+          OPENAI_EMBEDDING_MODEL=text-embedding-3-small
+
+          # SMTP
+          SMTP_HOST=${{ secrets.SMTP_HOST }}
+          SMTP_PORT=${{ secrets.SMTP_PORT }}
+          SMTP_USERNAME=${{ secrets.SMTP_USERNAME }}
+          SMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }}
+          FROM_EMAIL=${{ secrets.FROM_EMAIL }}
+          FROM_NAME=${{ secrets.FROM_NAME }}
+          SMTP_USE_TLS=true
+          SMTP_USE_SSL=false
+
           EOF
 
       - name: Deploy to VPS
