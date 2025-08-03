@@ -311,6 +311,55 @@ jobs:
               fi
             fi
 
+            # Configure Docker daemon DNS (only once, not for every deployment)
+            echo "🔧 Checking Docker daemon DNS configuration..."
+            if [ ! -f /etc/docker/daemon.json ] || ! grep -q '"dns"' /etc/docker/daemon.json 2>/dev/null; then
+              echo "📝 Configuring Docker daemon DNS for Google OAuth connectivity..."
+              
+              # Backup existing daemon.json if it exists
+              if [ -f /etc/docker/daemon.json ]; then
+                sudo cp /etc/docker/daemon.json /etc/docker/daemon.json.backup.$(date +%s)
+              fi
+              
+              # Create new daemon.json with DNS configuration
+              sudo tee /etc/docker/daemon.json > /dev/null << EOF
+            {
+              "dns": ["8.8.8.8", "8.8.4.4", "1.1.1.1"],
+              "dns-opts": ["ndots:0"],
+              "dns-search": [],
+              "log-driver": "json-file",
+              "log-opts": {
+                "max-size": "10m",
+                "max-file": "3"
+              }
+            }
+            EOF
+              
+              echo "🔄 Restarting Docker daemon to apply DNS configuration..."
+              sudo systemctl restart docker
+              
+              # Wait for Docker to be ready
+              sleep 15
+              
+              # Verify Docker is running properly
+              if ! sudo systemctl is-active --quiet docker; then
+                echo "❌ Docker failed to start after DNS configuration!"
+                # Restore backup if available
+                if [ -f /etc/docker/daemon.json.backup.* ]; then
+                  LATEST_BACKUP=$(ls -t /etc/docker/daemon.json.backup.* | head -1)
+                  echo "🔄 Restoring Docker daemon configuration from backup..."
+                  sudo mv "$LATEST_BACKUP" /etc/docker/daemon.json
+                  sudo systemctl restart docker
+                  sleep 10
+                fi
+                exit 1
+              fi
+              
+              echo "✅ Docker daemon DNS configured successfully"
+            else
+              echo "ℹ️  Docker daemon DNS already configured"
+            fi
+
             # Login to registry and start container
             cd "$TARGET_DIR"
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
