@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -31,7 +32,6 @@ func SetupDashboardRoutes(router *gin.RouterGroup, handlers *DashboardHandlers, 
 		dashboard.GET("/stats", handlers.GetDashboardStats)
 		dashboard.GET("/most-used-tags", handlers.GetMostUsedTags)
 		dashboard.GET("/recent-videos", handlers.GetRecentVideos)
-		dashboard.GET("/recent-activity", handlers.GetRecentActivity)
 		dashboard.GET("/recent-notes", handlers.GetRecentNotes)
 	}
 }
@@ -88,33 +88,6 @@ func (d *DashboardHandlers) GetRecentVideos(c *gin.Context) {
 	}
 
 	middleware.RespondWithOK(c, gin.H{"videos": videos})
-}
-
-func (d *DashboardHandlers) GetRecentActivity(c *gin.Context) {
-	userIDStr, exists := authhandlers.GetUserID(c)
-	if !exists {
-		middleware.RespondWithError(c, http.StatusUnauthorized, "NO_USER_ID", "User ID not found", nil)
-		return
-	}
-
-	userID, err := uuid.Parse(userIDStr)
-	if err != nil {
-		middleware.RespondWithError(c, http.StatusBadRequest, "INVALID_USER_ID", "Invalid user ID format", gin.H{
-			"error": err.Error(),
-		})
-		return
-	}
-
-	ctx := context.Background()
-	activities, err := d.getRecentActivity(ctx, userID)
-	if err != nil {
-		middleware.RespondWithError(c, http.StatusInternalServerError, "ACTIVITY_ERROR", "Failed to get recent activity", gin.H{
-			"error": err.Error(),
-		})
-		return
-	}
-
-	middleware.RespondWithOK(c, gin.H{"activities": activities})
 }
 
 func (d *DashboardHandlers) GetRecentNotes(c *gin.Context) {
@@ -180,11 +153,11 @@ func (d *DashboardHandlers) getMostUsedTags(ctx context.Context, userID uuid.UUI
 	var tagCounts []TagCount
 	err := d.db.DB.NewSelect().
 		Model((*models.Tag)(nil)).
-		ColumnExpr("tags.name, COUNT(*) as count").
-		Join("JOIN timestamp_tags tt ON tags.id = tt.tag_id").
+		ColumnExpr("tag.name, COUNT(*) as count").
+		Join("JOIN timestamp_tags tt ON tag.id = tt.tag_id").
 		Join("JOIN timestamps ts ON tt.timestamp_id = ts.id").
-		Where("ts.user_id = ? AND ts.deleted_at IS NULL AND tags.deleted_at IS NULL", userID).
-		Group("tags.id, tags.name").
+		Where("ts.user_id = ? AND ts.deleted_at IS NULL AND tag.deleted_at IS NULL", userID).
+		Group("tag.id", "tag.name").
 		Order("count DESC").
 		Limit(10).
 		Scan(ctx, &tagCounts)
@@ -199,7 +172,6 @@ func (d *DashboardHandlers) getMostUsedTags(ctx context.Context, userID uuid.UUI
 			"count": tc.Count,
 		}
 	}
-
 	return tags, nil
 }
 
@@ -218,12 +190,13 @@ func (d *DashboardHandlers) getRecentVideos(ctx context.Context, userID uuid.UUI
 	err := d.db.DB.NewSelect().
 		Model((*models.Video)(nil)).
 		Column("v.video_id", "v.title", "v.thumbnail_url", "v.duration", "v.watched_duration").
-		Column("COUNT(ts.id) as note_count").
-		Column("MAX(ts.created_at) as latest_timestamp").
+		ColumnExpr("COUNT(ts.id) AS note_count").
+		ColumnExpr("MAX(ts.created_at) AS latest_timestamp").
 		Join("LEFT JOIN timestamps ts ON v.video_id = ts.video_id AND ts.user_id = ? AND ts.deleted_at IS NULL", userID).
 		Where("v.user_id = ? AND v.deleted_at IS NULL", userID).
-		Group("v.id, v.video_id, v.title, v.thumbnail_url, v.duration, v.watched_duration").
-		Order("latest_timestamp DESC NULLS LAST, v.created_at DESC").
+		Group("v.id", "v.video_id", "v.title", "v.thumbnail_url", "v.duration", "v.watched_duration").
+		OrderExpr("latest_timestamp DESC NULLS LAST").
+		OrderExpr("v.created_at DESC").
 		Limit(5).
 		Scan(ctx, &videoData)
 	if err != nil {
@@ -256,75 +229,51 @@ func (d *DashboardHandlers) getRecentVideos(ctx context.Context, userID uuid.UUI
 	return videos, nil
 }
 
-func (d *DashboardHandlers) getRecentActivity(ctx context.Context, userID uuid.UUID) ([]gin.H, error) {
-	type ActivityData struct {
-		Title     string    `bun:"title"`
-		CreatedAt time.Time `bun:"created_at"`
-	}
-
-	var activityData []ActivityData
-	err := d.db.DB.NewSelect().
-		Model((*models.Timestamp)(nil)).
-		Column("title", "created_at").
-		Where("user_id = ? AND deleted_at IS NULL", userID).
-		Order("created_at DESC").
-		Limit(5).
-		Scan(ctx, &activityData)
-	if err != nil {
-		return nil, fmt.Errorf("failed to query recent activity: %w", err)
-	}
-
-	activities := make([]gin.H, len(activityData))
-	for i, ad := range activityData {
-		activities[i] = gin.H{
-			"title":     ad.Title,
-			"timestamp": ad.CreatedAt.Format(time.RFC3339),
-			"duration":  300, // This seems like a hardcoded value - consider making it dynamic
-		}
-	}
-
-	return activities, nil
-}
-
 func (d *DashboardHandlers) getRecentNotes(ctx context.Context, userID uuid.UUID) ([]gin.H, error) {
 	type NoteData struct {
 		ID         string    `bun:"id"`
 		Title      string    `bun:"title"`
 		CreatedAt  time.Time `bun:"created_at"`
 		VideoTitle *string   `bun:"video_title"`
+		TagNames   *string   `bun:"tag_names"`
 	}
 
 	var noteData []NoteData
 	err := d.db.DB.NewSelect().
-		Model((*models.Timestamp)(nil)).
-		Column("timestamps.id", "timestamps.title", "timestamps.created_at").
-		Column("v.title as video_title").
-		Join("LEFT JOIN videos v ON timestamps.video_id = v.video_id AND v.user_id = timestamps.user_id AND v.deleted_at IS NULL").
-		Where("timestamps.user_id = ? AND timestamps.deleted_at IS NULL", userID).
-		Order("timestamps.created_at DESC").
-		Limit(10).
+		Model((*models.Timestamp)(nil)).TableExpr("timestamps t").
+		Column("t.id", "t.title", "t.created_at").
+		ColumnExpr("v.title AS video_title").
+		ColumnExpr("STRING_AGG(DISTINCT tags.name, ',') AS tag_names").
+		Join("INNER JOIN videos v ON t.video_id = v.video_id AND t.user_id = v.user_id AND v.deleted_at IS NULL").
+		Join("LEFT JOIN timestamp_tags tt ON t.id = tt.timestamp_id").
+		Join("LEFT JOIN tags ON tt.tag_id = tags.id AND tags.deleted_at IS NULL").
+		Where("t.user_id = ? AND t.deleted_at IS NULL", userID).
+		Group("t.id", "t.title", "t.created_at", "v.title").
+		OrderExpr("t.created_at DESC").
+		Limit(5).
 		Scan(ctx, &noteData)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query recent notes: %w", err)
 	}
 
+	// Build response
 	notes := make([]gin.H, len(noteData))
 	for i, nd := range noteData {
-		var tags []string
-		err := d.db.DB.NewSelect().
-			Model((*models.Tag)(nil)).
-			Column("tags.name").
-			Join("JOIN timestamp_tags tt ON tags.id = tt.tag_id").
-			Where("tt.timestamp_id = ?", nd.ID).
-			Scan(ctx, &tags)
-		if err != nil {
-			// Log the error but don't fail the entire request
-			tags = []string{}
-		}
-
 		videoTitle := ""
 		if nd.VideoTitle != nil {
 			videoTitle = *nd.VideoTitle
+		}
+
+		var tags []string
+		if nd.TagNames != nil && *nd.TagNames != "" {
+			// Split the comma-separated tag names
+			tagList := strings.Split(*nd.TagNames, ",")
+			tags = make([]string, 0, len(tagList))
+			for _, tag := range tagList {
+				if trimmed := strings.TrimSpace(tag); trimmed != "" {
+					tags = append(tags, trimmed)
+				}
+			}
 		}
 
 		notes[i] = gin.H{

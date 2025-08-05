@@ -5,10 +5,9 @@ import { useState } from 'react';
 
 interface RecentNotesProps {
   notes: RecentNote[];
-  availableTags: string[];
 }
 
-export const RecentNotes = ({ notes, availableTags }: RecentNotesProps) => {
+export const RecentNotes = ({ notes }: RecentNotesProps) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedTag, setSelectedTag] = useState('All');
 
@@ -16,7 +15,8 @@ export const RecentNotes = ({ notes, availableTags }: RecentNotesProps) => {
     const matchesSearch =
       note.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       note.video_title.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesTag = selectedTag === 'All' || note.tags.includes(selectedTag);
+    const noteTags = note.tags || [];
+    const matchesTag = selectedTag === 'All' || noteTags.includes(selectedTag);
     return matchesSearch && matchesTag;
   });
 
@@ -54,19 +54,6 @@ export const RecentNotes = ({ notes, availableTags }: RecentNotesProps) => {
             >
               All
             </button>
-            {availableTags.map((tag) => (
-              <button
-                key={tag}
-                onClick={() => setSelectedTag(tag)}
-                className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                  selectedTag === tag
-                    ? 'bg-orange-600 text-white'
-                    : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
-                }`}
-              >
-                {tag}
-              </button>
-            ))}
           </div>
 
           {/* Notes List */}
@@ -81,7 +68,7 @@ export const RecentNotes = ({ notes, availableTags }: RecentNotesProps) => {
                 </p>
                 <div className='flex items-center justify-between'>
                   <div className='flex flex-wrap gap-1'>
-                    {note.tags.slice(0, 3).map((tag) => (
+                    {(note.tags || []).slice(0, 3).map((tag) => (
                       <span
                         key={tag}
                         className='px-2 py-1 bg-white text-xs text-gray-600 rounded border'
@@ -89,9 +76,9 @@ export const RecentNotes = ({ notes, availableTags }: RecentNotesProps) => {
                         {tag}
                       </span>
                     ))}
-                    {note.tags.length > 3 && (
+                    {(note.tags || []).length > 3 && (
                       <span className='px-2 py-1 bg-white text-xs text-gray-400 rounded border'>
-                        +{note.tags.length - 3}
+                        +{(note.tags || []).length - 3}
                       </span>
                     )}
                   </div>

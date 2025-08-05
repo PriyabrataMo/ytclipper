@@ -1,19 +1,16 @@
 import {
   MostUsedTags,
-  RecentActivityList,
   RecentNotes,
   RecentVideos,
   StatsCards,
 } from '@/components/dashboard';
 import {
   MostUsedTagsLoader,
-  RecentActivityLoader,
   RecentNotesLoader,
   RecentVideosLoader,
 } from '@/components/dashboard/loaders';
 import {
   useGetMostUsedTagsQuery,
-  useGetRecentActivityQuery,
   useGetRecentNotesQuery,
   useGetRecentVideosQuery,
 } from '@/services/dashboard';
@@ -23,18 +20,9 @@ export function DashboardPage() {
   const { data: tagsData, isLoading: tagsLoading } = useGetMostUsedTagsQuery();
   const { data: videosData, isLoading: videosLoading } =
     useGetRecentVideosQuery();
-  const { data: activityData, isLoading: activityLoading } =
-    useGetRecentActivityQuery();
   const { data: notesData, isLoading: notesLoading } = useGetRecentNotesQuery();
 
   // Extract available tags from notes for the RecentNotes component
-  const allTags = new Set<string>();
-  if (notesData?.notes) {
-    notesData.notes.forEach((note) => {
-      note.tags.forEach((tag) => allTags.add(tag));
-    });
-  }
-  const availableTags = Array.from(allTags);
 
   return (
     <div className='min-h-screen bg-orange-50 p-6'>
@@ -67,28 +55,20 @@ export function DashboardPage() {
             {tagsLoading ? (
               <MostUsedTagsLoader />
             ) : (
-              <MostUsedTags tags={tagsData?.tags || []} />
+              <MostUsedTags tags={tagsData?.data?.tags || []} />
             )}
             {videosLoading ? (
               <RecentVideosLoader />
             ) : (
-              <RecentVideos videos={videosData?.videos || []} />
+              <RecentVideos videos={videosData?.data?.videos || []} />
             )}
           </div>
 
           <div className='space-y-8'>
-            {activityLoading ? (
-              <RecentActivityLoader />
-            ) : (
-              <RecentActivityList activities={activityData?.activities || []} />
-            )}
             {notesLoading ? (
               <RecentNotesLoader />
             ) : (
-              <RecentNotes
-                notes={notesData?.notes || []}
-                availableTags={availableTags}
-              />
+              <RecentNotes notes={notesData?.data?.notes || []} />
             )}
           </div>
         </div>
