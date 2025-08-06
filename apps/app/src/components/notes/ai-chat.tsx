@@ -1,7 +1,4 @@
-import {
-  useAnswerQuestionMutation,
-  useGenerateSummaryMutation,
-} from '@/services/timestamps';
+import { useAnswerQuestionMutation } from '@/services/timestamps';
 import { useAppSelector } from '@/store/hooks';
 import {
   Badge,
@@ -12,7 +9,7 @@ import {
   CardTitle,
   Input,
 } from '@ytclipper/ui';
-import { Bot, Check, Copy, Loader2, Send, Sparkles, User } from 'lucide-react';
+import { Bot, Check, Copy, Send, Sparkles, User } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 interface Message {
@@ -49,8 +46,6 @@ export const AIChat = ({ videoId, currentTimestamp }: AIChatProps) => {
 
   const [answerQuestion, { isLoading: isAnswering }] =
     useAnswerQuestionMutation();
-  const [generateSummary, { isLoading: isGeneratingSummary }] =
-    useGenerateSummaryMutation();
 
   const formatTime = (seconds: number) => {
     const minutes = Math.floor(seconds / 60);
@@ -106,37 +101,6 @@ export const AIChat = ({ videoId, currentTimestamp }: AIChatProps) => {
           'Sorry, I encountered an error while processing your question. Please try again.',
         timestamp: new Date(),
         relatedTimestamp: currentTimestamp,
-      };
-      setMessages((prev) => [...prev, errorResponse]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleGenerateSummary = async () => {
-    setIsLoading(true);
-
-    try {
-      const response = await generateSummary({
-        video_id: videoId,
-        type: 'brief',
-      }).unwrap();
-
-      const summaryMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        type: 'ai',
-        content: `**Video Summary:**\n\n${response.data.summary}`,
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, summaryMessage]);
-    } catch (error) {
-      console.error('Failed to generate summary:', error);
-      const errorResponse: Message = {
-        id: (Date.now() + 1).toString(),
-        type: 'ai',
-        content:
-          'Sorry, I encountered an error while generating the summary. Please try again.',
-        timestamp: new Date(),
       };
       setMessages((prev) => [...prev, errorResponse]);
     } finally {
@@ -301,21 +265,6 @@ export const AIChat = ({ videoId, currentTimestamp }: AIChatProps) => {
         <div>
           <div className='px-4 py-3 border-t'>
             <div className='flex gap-2 mb-2'>
-              <Button
-                variant='outline'
-                size='sm'
-                onClick={handleGenerateSummary}
-                disabled={isGeneratingSummary}
-                className='text-xs h-7'
-              >
-                {isGeneratingSummary ? (
-                  <Loader2 className='h-3 w-3 mr-1 animate-spin' />
-                ) : (
-                  <Sparkles className='h-3 w-3 mr-1' />
-                )}
-                Generate Summary
-              </Button>
-
               <Button
                 variant='ghost'
                 size='sm'

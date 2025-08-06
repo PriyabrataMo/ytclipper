@@ -33,6 +33,7 @@ type Video struct {
 	AISummary            string     `bun:"ai_summary" json:"ai_summary"`
 	AISummaryGeneratedAt *time.Time `bun:"ai_summary_generated_at" json:"ai_summary_generated_at"`
 	WatchedDuration      int        `bun:"watched_duration,default:0" json:"watched_duration"`
+	TranscriptEmbedding  []float32  `bun:"transcript_embedding,nullzero" json:"-"`
 
 	// Statistics
 	ViewCount    int64 `bun:"view_count,default:0" json:"view_count"`

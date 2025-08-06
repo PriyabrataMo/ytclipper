@@ -72,17 +72,18 @@ export interface SearchTimestampsResponse {
   count: number;
 }
 
-export interface GenerateSummaryRequest {
+export interface GenerateFullVideoSummaryRequest {
   video_id: string;
-  type?: 'brief' | 'detailed' | 'key_points';
+  refresh?: boolean;
 }
 
-export interface GenerateSummaryResponse {
+export interface GenerateFullVideoSummaryResponse {
   summary: string;
   video_id: string;
-  type: string;
+  video_title: string;
   note_count: number;
   generated_at: string;
+  cached: boolean;
 }
 
 export interface AnswerQuestionRequest {
@@ -175,16 +176,17 @@ export const injectedTimestampsApi = api.injectEndpoints({
     }),
 
     // AI Features
-    generateSummary: builder.mutation<
-      UniversalResponse<GenerateSummaryResponse>,
-      GenerateSummaryRequest
+    generateFullVideoSummary: builder.mutation<
+      UniversalResponse<GenerateFullVideoSummaryResponse>,
+      GenerateFullVideoSummaryRequest
     >({
       query: (data) => ({
-        url: '/timestamps/summary',
+        url: '/timestamps/full-summary',
         method: 'POST',
         body: JSON.stringify(data),
       }),
     }),
+
     answerQuestion: builder.mutation<
       UniversalResponse<AnswerQuestionResponse>,
       AnswerQuestionRequest
@@ -208,6 +210,6 @@ export const {
   useGetAllTagsQuery,
   useSearchTagsMutation,
   useSearchTimestampsMutation,
-  useGenerateSummaryMutation,
+  useGenerateFullVideoSummaryMutation,
   useAnswerQuestionMutation,
 } = injectedTimestampsApi;
