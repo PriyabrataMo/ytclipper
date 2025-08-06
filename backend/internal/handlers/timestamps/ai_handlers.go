@@ -96,6 +96,55 @@ func (t *TimestampsHandlers) SearchTimestamps(c *gin.Context) {
 	})
 }
 
+func (t *TimestampsHandlers) GetVideoSummary(c *gin.Context) {
+	userIDStr, exists := authhandlers.GetUserID(c)
+	if !exists {
+		middleware.RespondWithError(c, http.StatusUnauthorized, "NO_USER_ID", "User ID not found", nil)
+		return
+	}
+
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		middleware.RespondWithError(c, http.StatusBadRequest, "INVALID_USER_ID", "Invalid user ID format", gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	videoID := c.Param("id")
+	if videoID == "" {
+		middleware.RespondWithError(c, http.StatusBadRequest, "MISSING_VIDEO_ID", "Video ID is required", nil)
+		return
+	}
+
+	var video models.Video
+	err = t.db.DB.NewSelect().
+		Model(&video).
+		Where("user_id = ? AND video_id = ? AND deleted_at IS NULL", userID, videoID).
+		Scan(context.Background())
+
+	if err != nil {
+		middleware.RespondWithError(c, http.StatusNotFound, "VIDEO_NOT_FOUND", "Video not found or does not belong to user", gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	var aiSummary string
+	if video.AISummary != "" && video.AISummaryGeneratedAt != nil {
+		aiSummary = video.AISummary
+	} else {
+		aiSummary = ""
+	}
+
+	middleware.RespondWithOK(c, gin.H{
+		"summary":      aiSummary,
+		"video_id":     videoID,
+		"cached":       aiSummary != "",
+		"generated_at": video.AISummaryGeneratedAt,
+	})
+}
+
 func (t *TimestampsHandlers) GenerateFullVideoSummary(c *gin.Context) {
 	userIDStr, exists := authhandlers.GetUserID(c)
 	if !exists {
@@ -125,7 +174,6 @@ func (t *TimestampsHandlers) GenerateFullVideoSummary(c *gin.Context) {
 		Where("user_id = ? AND video_id = ? AND deleted_at IS NULL", userID, req.VideoID).
 		Scan(context.Background())
 	if err != nil {
-		log.Printf("Video not found, creating new video record for: %s", req.VideoID)
 		placeholderTitle := "Video " + req.VideoID
 		placeholderURL := "https://youtube.com/watch?v=" + req.VideoID
 
@@ -145,7 +193,6 @@ func (t *TimestampsHandlers) GenerateFullVideoSummary(c *gin.Context) {
 			})
 			return
 		}
-		log.Printf("Successfully created video record")
 	}
 
 	var currentVideo models.Video
@@ -165,7 +212,6 @@ func (t *TimestampsHandlers) GenerateFullVideoSummary(c *gin.Context) {
 
 	// Check if this user already has transcript embedding
 	if len(currentVideo.TranscriptEmbedding) > 0 {
-		log.Printf("Transcript embedding already exists for user %s and video %s", userID, req.VideoID)
 		transcriptEmbedding = currentVideo.TranscriptEmbedding
 	} else {
 		var otherVideo models.Video
@@ -176,7 +222,6 @@ func (t *TimestampsHandlers) GenerateFullVideoSummary(c *gin.Context) {
 			Scan(context.Background())
 
 		if err == nil && len(otherVideo.TranscriptEmbedding) > 0 {
-			log.Printf("Found transcript embedding from another user, copying to current user")
 			_, err = t.db.DB.NewUpdate().
 				Model(&currentVideo).
 				Set("transcript_embedding = ?", otherVideo.TranscriptEmbedding).
@@ -191,10 +236,8 @@ func (t *TimestampsHandlers) GenerateFullVideoSummary(c *gin.Context) {
 			}
 			transcriptEmbedding = otherVideo.TranscriptEmbedding
 		} else {
-			log.Printf("No existing transcript embedding found, generating new one")
 			transcript, err := t.generateYouTubeTranscript(req.VideoID)
 			if err != nil {
-				log.Printf("Failed to generate transcript: %v", err)
 				placeholderText := fmt.Sprintf("Video: %s. No transcript available.", video.Title)
 				transcriptEmbedding, err = t.aiService.GenerateEmbedding(placeholderText)
 				if err != nil {
@@ -239,7 +282,6 @@ func (t *TimestampsHandlers) GenerateFullVideoSummary(c *gin.Context) {
 	}
 
 	if !req.Refresh && currentVideo.AISummary != "" && currentVideo.AISummaryGeneratedAt != nil {
-		log.Printf("AI summary already exists for user %s and video %s, returning existing summary", userID, req.VideoID)
 		middleware.RespondWithOK(c, gin.H{
 			"summary":      currentVideo.AISummary,
 			"video_id":     req.VideoID,
@@ -276,7 +318,6 @@ func (t *TimestampsHandlers) GenerateFullVideoSummary(c *gin.Context) {
 
 		// Stream the summary word by word
 		words := strings.Fields(summary)
-		log.Printf("Starting to stream %d words", len(words))
 
 		for i, word := range words {
 			chunkData := gin.H{
@@ -288,13 +329,11 @@ func (t *TimestampsHandlers) GenerateFullVideoSummary(c *gin.Context) {
 			// Convert to JSON
 			jsonData, err := json.Marshal(chunkData)
 			if err != nil {
-				log.Printf("Failed to marshal chunk data: %v", err)
 				continue
 			}
 
 			// Send SSE event in proper format
 			eventData := fmt.Sprintf("event: chunk\ndata: %s\n\n", string(jsonData))
-			log.Printf("Sending chunk %d/%d: %s", i+1, len(words), word)
 			c.Writer.WriteString(eventData)
 			c.Writer.Flush()
 			time.Sleep(50 * time.Millisecond) // Adjust speed as needed
@@ -310,14 +349,11 @@ func (t *TimestampsHandlers) GenerateFullVideoSummary(c *gin.Context) {
 			"cached":       false,
 		}
 
-		// Convert to JSON
 		completeJsonData, err := json.Marshal(completeData)
 		if err != nil {
 			log.Printf("Failed to marshal complete data: %v", err)
 		} else {
-			// Send completion event in proper format
 			completeEventData := fmt.Sprintf("event: complete\ndata: %s\n\n", string(completeJsonData))
-			log.Printf("Sending completion event")
 			c.Writer.WriteString(completeEventData)
 			c.Writer.Flush()
 		}
@@ -390,7 +426,6 @@ func (t *TimestampsHandlers) TestStreaming(c *gin.Context) {
 
 		// Send SSE event in proper format
 		eventData := fmt.Sprintf("event: chunk\ndata: %s\n\n", string(jsonData))
-		log.Printf("Test: Sending chunk %d/%d: %s", i+1, len(testWords), word)
 		c.Writer.WriteString(eventData)
 		c.Writer.Flush()
 		time.Sleep(100 * time.Millisecond)
@@ -411,7 +446,6 @@ func (t *TimestampsHandlers) TestStreaming(c *gin.Context) {
 		log.Printf("Failed to marshal test complete data: %v", err)
 	} else {
 		completeEventData := fmt.Sprintf("event: complete\ndata: %s\n\n", string(completeJsonData))
-		log.Printf("Test: Sending completion event")
 		c.Writer.WriteString(completeEventData)
 		c.Writer.Flush()
 	}
@@ -470,7 +504,6 @@ func (t *TimestampsHandlers) AnswerQuestion(c *gin.Context) {
 		if err == nil && len(video.TranscriptEmbedding) > 0 {
 			// Calculate similarity with transcript embedding
 			transcriptSimilarity := CosineSimilarity(queryEmbedding, video.TranscriptEmbedding)
-			log.Printf("Question similarity with transcript: %.3f", transcriptSimilarity)
 
 			// If transcript is highly relevant, include it in context
 			if transcriptSimilarity > 0.3 { // Threshold for relevance
@@ -670,21 +703,15 @@ Make your answer helpful, accurate, and well-structured.`,
 func (t *TimestampsHandlers) generateYouTubeTranscript(videoID string) (string, error) {
 	client := youtube.Client{}
 
-	log.Println("Attempting to get video:", videoID)
-
 	// Try to get video info first
 	video, err := client.GetVideo(videoID)
 	if err != nil {
-		log.Printf("Error getting video info: %v", err)
 		return "", fmt.Errorf("failed to get video info: %w", err)
 	}
-
-	log.Printf("Successfully got video: %s", video.Title)
 
 	// Try to get transcript
 	transcript, err := client.GetTranscript(video)
 	if err != nil {
-		log.Printf("Error getting transcript: %v", err)
 		return "", fmt.Errorf("failed to get transcript: %w", err)
 	}
 
@@ -694,7 +721,6 @@ func (t *TimestampsHandlers) generateYouTubeTranscript(videoID string) (string, 
 		transcriptText.WriteString(" ")
 	}
 
-	log.Printf("Successfully generated transcript with %d lines", len(transcript))
 	return transcriptText.String(), nil
 }
 

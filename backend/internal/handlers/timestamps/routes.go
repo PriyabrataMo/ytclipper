@@ -39,6 +39,7 @@ func SetupTimestampRoutes(router *gin.RouterGroup, handlers *TimestampsHandlers,
 		timestampRoutes.POST("/search", handlers.SearchTimestamps)
 
 		// AI features
+		timestampRoutes.GET("/summary/:id", handlers.GetVideoSummary)
 		timestampRoutes.POST("/full-summary", handlers.GenerateFullVideoSummary)
 		timestampRoutes.POST("/question", handlers.AnswerQuestion)
 

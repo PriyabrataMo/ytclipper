@@ -62,8 +62,6 @@ func (t *TimestampsHandlers) processEmbeddingsBackground(userID string) {
 		return
 	}
 
-	log.Printf("Found %d timestamps needing embeddings for user %s", len(timestamps), userID)
-
 	processed := 0
 	for i := 0; i < len(timestamps); i += batchSize {
 		end := i + batchSize
@@ -85,7 +83,6 @@ func (t *TimestampsHandlers) processEmbeddingsBackground(userID string) {
 
 			embedding, err := t.aiService.GenerateEmbedding(embeddingText)
 			if err != nil {
-				log.Printf("Failed to generate embedding for timestamp %s: %v", ts.ID, err)
 				time.Sleep(5 * time.Second)
 				continue
 			}
@@ -106,10 +103,7 @@ func (t *TimestampsHandlers) processEmbeddingsBackground(userID string) {
 		}
 
 		time.Sleep(2 * time.Second)
-		log.Printf("Processed %d/%d timestamps for user %s", processed, len(timestamps), userID)
 	}
-
-	log.Printf("Completed embedding backfill for user %s: %d/%d processed", userID, processed, len(timestamps))
 }
 
 func (t *TimestampsHandlers) GetEmbeddingStatus(c *gin.Context) {

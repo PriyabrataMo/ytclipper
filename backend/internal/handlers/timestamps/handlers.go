@@ -49,7 +49,6 @@ func (t *TimestampsHandlers) GetAllTags(c *gin.Context) {
 
 	tags, err := t.tagService.GetAllTags(c.Request.Context(), userID, limit)
 	if err != nil {
-		log.Printf("Error fetching all tags: %v", err)
 		middleware.RespondWithError(c, http.StatusInternalServerError, "FAILED_TO_FETCH_TAGS", "Failed to fetch tags", gin.H{"error": err.Error()})
 		return
 	}
@@ -81,7 +80,6 @@ func (t *TimestampsHandlers) SearchTags(c *gin.Context) {
 
 	tags, err := t.tagService.SearchTags(c.Request.Context(), userID, req.Query, req.Limit)
 	if err != nil {
-		log.Printf("Error searching tags: %v", err)
 		middleware.RespondWithError(c, http.StatusInternalServerError, "FAILED_TO_SEARCH_TAGS", "Failed to search tags", gin.H{"error": err.Error()})
 		return
 	}

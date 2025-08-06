@@ -3,6 +3,7 @@ import { VideoPlayer } from '@/components/video';
 import { useStreamingSummary } from '@/hooks/use-streaming-summary';
 import { useYouTubePlayer } from '@/hooks/youtube-player';
 import { extractVideoId } from '@/lib/utils';
+import { useGetVideoSummaryQuery } from '@/services/timestamps';
 import {
   Badge,
   Button,
@@ -41,6 +42,21 @@ export const TimestampsPage = () => {
   const [isGeneratingFullSummary, setIsGeneratingFullSummary] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showAnimation, setShowAnimation] = useState(false);
+  const { data: videoSummary } = useGetVideoSummaryQuery(videoId || '', {
+    skip: !videoId,
+    refetchOnMountOrArgChange: true,
+  });
+
+  useEffect(() => {
+    if (videoSummary) {
+      setFullSummary(videoSummary.data.summary);
+      if (videoSummary.data.cached) {
+        toast('Full video summary retrieved from cache!', {
+          description: 'Using previously generated comprehensive summary.',
+        });
+      }
+    }
+  }, [videoSummary]);
 
   const { seekTo } = useYouTubePlayer();
   const { isStreaming, streamedText, progress, generateStreamingSummary } =

@@ -37,7 +37,7 @@ export interface UpdateTimestampRequest {
 export interface GetTimestampsResponse {
   timestamps: Timestamp[];
   video_id: string;
-  user_id: string;
+  count: number;
 }
 
 export interface DeleteTimestampResponse {
@@ -65,6 +65,13 @@ export interface SearchTimestampsRequest {
   query: string;
   video_id?: string;
   limit?: number;
+}
+
+export interface GetVideoSummary {
+  video_id: string;
+  summary: string;
+  cached: boolean;
+  generated_at: string;
 }
 
 export interface SearchTimestampsResponse {
@@ -186,6 +193,9 @@ export const injectedTimestampsApi = api.injectEndpoints({
         body: JSON.stringify(data),
       }),
     }),
+    getVideoSummary: builder.query<UniversalResponse<GetVideoSummary>, string>({
+      query: (videoId) => `/timestamps/summary/${videoId}`,
+    }),
 
     answerQuestion: builder.mutation<
       UniversalResponse<AnswerQuestionResponse>,
@@ -212,4 +222,5 @@ export const {
   useSearchTimestampsMutation,
   useGenerateFullVideoSummaryMutation,
   useAnswerQuestionMutation,
+  useGetVideoSummaryQuery,
 } = injectedTimestampsApi;
