@@ -446,15 +446,7 @@ func (t *TimestampsHandlers) AnswerQuestion(c *gin.Context) {
 		return
 	}
 
-	searchReq := SearchRequest{
-		Query:   req.Question,
-		VideoID: req.VideoID,
-		Limit:   req.Context,
-	}
-	if searchReq.Limit == 0 {
-		searchReq.Limit = 5
-	}
-
+	// Generate embedding for the question
 	queryEmbedding, err := t.aiService.GenerateEmbedding(req.Question)
 	if err != nil {
 		middleware.RespondWithError(c, http.StatusInternalServerError, "EMBEDDING_ERROR", "Failed to generate question embedding", gin.H{
@@ -463,70 +455,172 @@ func (t *TimestampsHandlers) AnswerQuestion(c *gin.Context) {
 		return
 	}
 
-	query := t.db.DB.NewSelect().
-		Model((*models.Timestamp)(nil)).
-		Where("user_id = ? AND deleted_at IS NULL", userID)
+	var contextBuilder strings.Builder
+	contextBuilder.WriteString("# Video Context\n\n")
 
+	// If video_id is provided, try to get transcript embedding and relevant notes
 	if req.VideoID != "" {
-		query = query.Where("video_id = ?", req.VideoID)
-	}
+		// Get video record to check for transcript embedding
+		var video models.Video
+		err = t.db.DB.NewSelect().
+			Model(&video).
+			Where("user_id = ? AND video_id = ? AND deleted_at IS NULL", userID, req.VideoID).
+			Scan(context.Background())
 
-	var timestamps []models.Timestamp
-	err = query.Scan(context.Background(), &timestamps)
-	if err != nil {
-		middleware.RespondWithError(c, http.StatusInternalServerError, "DB_READ_ERROR", "Failed to fetch timestamps", gin.H{
-			"error": err.Error(),
-		})
-		return
-	}
+		if err == nil && len(video.TranscriptEmbedding) > 0 {
+			// Calculate similarity with transcript embedding
+			transcriptSimilarity := CosineSimilarity(queryEmbedding, video.TranscriptEmbedding)
+			log.Printf("Question similarity with transcript: %.3f", transcriptSimilarity)
 
-	var scoredResults []ScoredTimestamp
-	for _, ts := range timestamps {
-		if len(ts.Embedding) > 0 {
-			score := CosineSimilarity(queryEmbedding, ts.Embedding)
-			scoredResults = append(scoredResults, ScoredTimestamp{
-				Timestamp: ts,
-				Score:     score,
-			})
-		}
-	}
-
-	sort.Slice(scoredResults, func(i, j int) bool {
-		return scoredResults[i].Score > scoredResults[j].Score
-	})
-
-	if len(scoredResults) > searchReq.Limit {
-		scoredResults = scoredResults[:searchReq.Limit]
-	}
-
-	var context strings.Builder
-	context.WriteString("# Relevant Video Notes\n\n")
-
-	for i, scored := range scoredResults {
-		ts := scored.Timestamp.(models.Timestamp)
-		context.WriteString(fmt.Sprintf("## Note %d (Timestamp: %.2f seconds, Relevance: %.3f)\n\n", i+1, ts.Timestamp, scored.Score))
-		if ts.Title != "" {
-			context.WriteString(fmt.Sprintf("**Title:** %s\n\n", ts.Title))
-		}
-		if ts.Note != "" {
-			context.WriteString(fmt.Sprintf("**Content:**\n%s\n\n", ts.Note))
-		}
-		if len(ts.Tags) > 0 {
-			var tagNames []string
-			for _, tag := range ts.Tags {
-				tagNames = append(tagNames, tag.Name)
+			// If transcript is highly relevant, include it in context
+			if transcriptSimilarity > 0.3 { // Threshold for relevance
+				contextBuilder.WriteString("## Video Transcript Context\n\n")
+				contextBuilder.WriteString("The question is highly relevant to the video transcript content. ")
+				contextBuilder.WriteString("The AI will use the full video transcript to provide a comprehensive answer.\n\n")
 			}
-			context.WriteString(fmt.Sprintf("**Tags:** %s\n\n", strings.Join(tagNames, ", ")))
 		}
-		context.WriteString("---\n\n")
+
+		// Get relevant user notes for this video
+		searchReq := SearchRequest{
+			Query:   req.Question,
+			VideoID: req.VideoID,
+			Limit:   req.Context,
+		}
+		if searchReq.Limit == 0 {
+			searchReq.Limit = 5
+		}
+
+		query := t.db.DB.NewSelect().
+			Model((*models.Timestamp)(nil)).
+			Where("user_id = ? AND video_id = ? AND deleted_at IS NULL", userID, req.VideoID)
+
+		var timestamps []models.Timestamp
+		err = query.Scan(context.Background(), &timestamps)
+		if err != nil {
+			middleware.RespondWithError(c, http.StatusInternalServerError, "DB_READ_ERROR", "Failed to fetch timestamps", gin.H{
+				"error": err.Error(),
+			})
+			return
+		}
+
+		var scoredResults []ScoredTimestamp
+		for _, ts := range timestamps {
+			if len(ts.Embedding) > 0 {
+				score := CosineSimilarity(queryEmbedding, ts.Embedding)
+				scoredResults = append(scoredResults, ScoredTimestamp{
+					Timestamp: ts,
+					Score:     score,
+				})
+			}
+		}
+
+		sort.Slice(scoredResults, func(i, j int) bool {
+			return scoredResults[i].Score > scoredResults[j].Score
+		})
+
+		if len(scoredResults) > searchReq.Limit {
+			scoredResults = scoredResults[:searchReq.Limit]
+		}
+
+		if len(scoredResults) > 0 {
+			contextBuilder.WriteString("## Relevant User Notes\n\n")
+
+			for i, scored := range scoredResults {
+				ts := scored.Timestamp.(models.Timestamp)
+				contextBuilder.WriteString(fmt.Sprintf("### Note %d (Timestamp: %.2f seconds, Relevance: %.3f)\n\n", i+1, ts.Timestamp, scored.Score))
+				if ts.Title != "" {
+					contextBuilder.WriteString(fmt.Sprintf("**Title:** %s\n\n", ts.Title))
+				}
+				if ts.Note != "" {
+					contextBuilder.WriteString(fmt.Sprintf("**Content:**\n%s\n\n", ts.Note))
+				}
+				if len(ts.Tags) > 0 {
+					var tagNames []string
+					for _, tag := range ts.Tags {
+						tagNames = append(tagNames, tag.Name)
+					}
+					contextBuilder.WriteString(fmt.Sprintf("**Tags:** %s\n\n", strings.Join(tagNames, ", ")))
+				}
+				contextBuilder.WriteString("---\n\n")
+			}
+		}
+	} else {
+		// If no video_id provided, search across all user notes
+		searchReq := SearchRequest{
+			Query: req.Question,
+			Limit: req.Context,
+		}
+		if searchReq.Limit == 0 {
+			searchReq.Limit = 5
+		}
+
+		query := t.db.DB.NewSelect().
+			Model((*models.Timestamp)(nil)).
+			Where("user_id = ? AND deleted_at IS NULL", userID)
+
+		var timestamps []models.Timestamp
+		err = query.Scan(context.Background(), &timestamps)
+		if err != nil {
+			middleware.RespondWithError(c, http.StatusInternalServerError, "DB_READ_ERROR", "Failed to fetch timestamps", gin.H{
+				"error": err.Error(),
+			})
+			return
+		}
+
+		var scoredResults []ScoredTimestamp
+		for _, ts := range timestamps {
+			if len(ts.Embedding) > 0 {
+				score := CosineSimilarity(queryEmbedding, ts.Embedding)
+				scoredResults = append(scoredResults, ScoredTimestamp{
+					Timestamp: ts,
+					Score:     score,
+				})
+			}
+		}
+
+		sort.Slice(scoredResults, func(i, j int) bool {
+			return scoredResults[i].Score > scoredResults[j].Score
+		})
+
+		if len(scoredResults) > searchReq.Limit {
+			scoredResults = scoredResults[:searchReq.Limit]
+		}
+
+		if len(scoredResults) > 0 {
+			contextBuilder.WriteString("## Relevant User Notes\n\n")
+
+			for i, scored := range scoredResults {
+				ts := scored.Timestamp.(models.Timestamp)
+				contextBuilder.WriteString(fmt.Sprintf("### Note %d (Video: %s, Timestamp: %.2f seconds, Relevance: %.3f)\n\n", i+1, ts.VideoID, ts.Timestamp, scored.Score))
+				if ts.Title != "" {
+					contextBuilder.WriteString(fmt.Sprintf("**Title:** %s\n\n", ts.Title))
+				}
+				if ts.Note != "" {
+					contextBuilder.WriteString(fmt.Sprintf("**Content:**\n%s\n\n", ts.Note))
+				}
+				if len(ts.Tags) > 0 {
+					var tagNames []string
+					for _, tag := range ts.Tags {
+						tagNames = append(tagNames, tag.Name)
+					}
+					contextBuilder.WriteString(fmt.Sprintf("**Tags:** %s\n\n", strings.Join(tagNames, ", ")))
+				}
+				contextBuilder.WriteString("---\n\n")
+			}
+		}
 	}
 
-	prompt := fmt.Sprintf(`Based on the following video notes (written in markdown format), please answer this question: "%s"
+	// Create enhanced prompt that includes transcript context
+	prompt := fmt.Sprintf(`You are an AI assistant helping answer questions about video content. 
+
+Question: "%s"
 
 %s
 
-Please provide a comprehensive answer based on the markdown content above. If the notes don't contain enough information to answer the question, please say so clearly. You can reference specific timestamps in your answer.`,
-		req.Question, context.String())
+Please provide a comprehensive answer based on the context above. If the question is about a specific video and you have access to the video transcript, use that information to provide a more complete answer. If the notes don't contain enough information to answer the question, please say so clearly. You can reference specific timestamps in your answer.
+
+Make your answer helpful, accurate, and well-structured.`,
+		req.Question, contextBuilder.String())
 
 	answer, err := t.aiService.GenerateTextCompletion(prompt)
 	if err != nil {
@@ -538,16 +632,29 @@ Please provide a comprehensive answer based on the markdown content above. If th
 
 	// Prepare relevant notes for response
 	var relevantNotes []gin.H
-	for _, scored := range scoredResults {
-		ts := scored.Timestamp.(models.Timestamp)
-		relevantNotes = append(relevantNotes, gin.H{
-			"id":        ts.ID,
-			"timestamp": ts.Timestamp,
-			"title":     ts.Title,
-			"note":      ts.Note,
-			"tags":      ts.Tags,
-			"score":     scored.Score,
-		})
+	if req.VideoID != "" {
+		// Get the scored results for the specific video
+		query := t.db.DB.NewSelect().
+			Model((*models.Timestamp)(nil)).
+			Where("user_id = ? AND video_id = ? AND deleted_at IS NULL", userID, req.VideoID)
+
+		var timestamps []models.Timestamp
+		err = query.Scan(context.Background(), &timestamps)
+		if err == nil {
+			for _, ts := range timestamps {
+				if len(ts.Embedding) > 0 {
+					score := CosineSimilarity(queryEmbedding, ts.Embedding)
+					relevantNotes = append(relevantNotes, gin.H{
+						"id":        ts.ID,
+						"timestamp": ts.Timestamp,
+						"title":     ts.Title,
+						"note":      ts.Note,
+						"tags":      ts.Tags,
+						"score":     score,
+					})
+				}
+			}
+		}
 	}
 
 	middleware.RespondWithOK(c, gin.H{
