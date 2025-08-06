@@ -157,8 +157,7 @@ export const NotesPanel = ({
 
   const handleUpdateNote = async (id: string) => {
     try {
-      console.log('Updating note:', id, editingNote);
-      const result = await updateTimestamp({
+      await updateTimestamp({
         id,
         data: {
           title: editingNote.title,
@@ -166,7 +165,6 @@ export const NotesPanel = ({
           tags: editingNote.tags,
         },
       }).unwrap();
-      console.log('Update successful:', result);
       setIsEditingNote(null);
       setEditingNote({ title: '', note: '', tags: [] });
       setIsPreviewMode(false);

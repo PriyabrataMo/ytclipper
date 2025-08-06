@@ -90,7 +90,6 @@ export const VideoPlayer = ({
           youtube_url: `https://youtube.com/watch?v=${videoId}`,
           title,
         }).unwrap();
-        console.log('Video metadata updated successfully');
       } catch (error) {
         console.error('Failed to update video metadata:', error);
       }
@@ -110,7 +109,6 @@ export const VideoPlayer = ({
           thumbnail_url: metadata.thumbnail_url,
           channel_title: metadata.channel_title,
         }).unwrap();
-        console.log('Basic video metadata updated successfully');
       } catch (error) {
         console.error('Failed to update video metadata:', error);
       }
