@@ -233,7 +233,7 @@ export const TimestampsPage = () => {
                           size='sm'
                           onClick={handleGenerateFullVideoSummary}
                           disabled={isGeneratingFullSummary}
-                          className='h-10 px-4 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white'
+                          className='h-8 px-4 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white'
                         >
                           {isGeneratingFullSummary ? (
                             <>
@@ -460,7 +460,7 @@ export const TimestampsPage = () => {
             minSize={30}
             style={{ overflow: 'visible' }}
           >
-            <div className='h-full'>
+            <div className='h-full max-h-[100vh]'>
               <Tabs defaultValue='notes' className='h-full flex flex-col'>
                 <TabsList className='grid w-full grid-cols-2'>
                   <TabsTrigger

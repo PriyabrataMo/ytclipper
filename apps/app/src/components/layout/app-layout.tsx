@@ -7,7 +7,7 @@ export const AppLayout = () => {
   return (
     <div className='min-h-screen flex flex-col bg-gray-50'>
       <header className='bg-white px-8 shadow-sm sticky top-0 z-50'>
-        <div className='max-w-full mx-auto px-8 py-3 flex justify-between items-center'>
+        <div className='max-w-full mx-auto py-3 flex justify-between items-center'>
           <Link
             to='/dashboard'
             className='text-xl font-bold text-orange-500 hover:text-orange-600'

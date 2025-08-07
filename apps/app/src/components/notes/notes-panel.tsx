@@ -312,11 +312,11 @@ export const NotesPanel = ({
   };
 
   return (
-    <div className='h-full bg-white border-l border-gray-200 flex flex-col min-w-0'>
+    <div className='h-full bg-white border border-secondary flex flex-col min-w-0 rounded-xl pb-4'>
       {/* Header */}
-      <div className='p-4 border-b border-gray-200 bg-white flex-shrink-0'>
+      <div className='p-4 border-b border-primary bg-white flex-shrink-0 rounded-t-xl'>
         <div className='flex items-center justify-between'>
-          <div className='min-w-0 flex-1'>
+          <div className='min-w-0 flex-1 rounded-t-xl'>
             <h2 className='text-lg font-semibold text-gray-900 flex items-center gap-2'>
               <FileText className='h-5 w-5 text-gray-600 flex-shrink-0' />
               <span className='truncate'>Video Notes</span>
@@ -554,7 +554,7 @@ export const NotesPanel = ({
       </div>
 
       {currentNote ? (
-        <div className='mx-4 mt-4 flex-shrink-0'>
+        <div className='m-4 flex-shrink-0'>
           <Card className='bg-orange-50 border-orange-200'>
             <CardHeader className='pb-3'>
               <div className='flex items-center justify-between'>
@@ -595,7 +595,7 @@ export const NotesPanel = ({
       ) : null}
 
       <div className='flex-1 min-h-0'>
-        <div className='flex-1 h-[calc(100vh-150px)] relative p-4 justify-center w-full overflow-y-auto'>
+        <div className='flex-1 h-fit max-h-[90vh] relative px-4 pb-4 justify-center w-full overflow-y-auto'>
           {timestampsLoading ? (
             <div className='text-center py-8'>
               <div className='inline-flex items-center justify-center w-12 h-12 bg-gray-100 rounded-full mb-4'>
