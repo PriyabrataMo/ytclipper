@@ -38,9 +38,16 @@ func SetupTimestampRoutes(router *gin.RouterGroup, handlers *TimestampsHandlers,
 		// Search timestamps
 		timestampRoutes.POST("/search", handlers.SearchTimestamps)
 
+		// Search transcript embeddings
+		timestampRoutes.POST("/search-transcript", handlers.SearchTranscriptEmbeddings)
+
 		// AI features
-		timestampRoutes.POST("/summary", handlers.GenerateSummary)
+		timestampRoutes.GET("/summary/:id", handlers.GetVideoSummary)
+		timestampRoutes.POST("/full-summary", handlers.GenerateFullVideoSummary)
 		timestampRoutes.POST("/question", handlers.AnswerQuestion)
+
+		// Test streaming endpoint
+		timestampRoutes.GET("/test-stream", handlers.TestStreaming)
 
 		// Embeddings management
 		timestampRoutes.POST("/embeddings/backfill", handlers.BackfillEmbeddingsAsync)

@@ -32,10 +32,8 @@ export const LoginPage = () => {
   const handleGoogleLogin = async () => {
     try {
       const result = await triggerGetGoogleUrl().unwrap();
-      console.log('Google login result:', result);
 
       if (result?.data.auth_url) {
-        console.log('Redirecting to Google login URL:', result.data.auth_url);
         window.location.href = result.data.auth_url;
       } else {
         console.error('No auth_url found in response:', result);

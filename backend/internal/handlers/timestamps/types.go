@@ -15,9 +15,9 @@ type CreateTimestampRequest struct {
 	Tags      []string `json:"tags"`
 }
 
-type SummaryRequest struct {
+type FullVideoSummaryRequest struct {
 	VideoID string `json:"video_id" binding:"required"`
-	Type    string `json:"type,omitempty"`
+	Refresh bool   `json:"refresh,omitempty"`
 }
 
 type SearchRequest struct {

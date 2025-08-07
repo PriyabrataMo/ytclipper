@@ -10,43 +10,6 @@ import (
 )
 
 // Video represents a YouTube video that has been clipped
-type Video struct {
-	bun.BaseModel `bun:"table:videos,alias:v"`
-
-	ID     uuid.UUID `bun:"id,pk,type:uuid,default:uuid_generate_v4()" json:"id"`
-	UserID uuid.UUID `bun:"user_id,type:uuid,notnull" json:"user_id"`
-
-	// YouTube video information
-	YouTubeURL  string `bun:"youtube_url,notnull" json:"youtube_url"`
-	VideoID     string `bun:"video_id,notnull" json:"video_id"`
-	Title       string `bun:"title,notnull" json:"title"`
-	Description string `bun:"description" json:"description"`
-
-	// Video metadata
-	ThumbnailURL string     `bun:"thumbnail_url" json:"thumbnail_url"`
-	Duration     int        `bun:"duration" json:"duration"` // Duration in seconds
-	PublishedAt  *time.Time `bun:"published_at" json:"published_at"`
-	ChannelID    string     `bun:"channel_id" json:"channel_id"`
-	ChannelTitle string     `bun:"channel_title" json:"channel_title"`
-
-	// AI and analytics
-	AISummary            string     `bun:"ai_summary" json:"ai_summary"`
-	AISummaryGeneratedAt *time.Time `bun:"ai_summary_generated_at" json:"ai_summary_generated_at"`
-	WatchedDuration      int        `bun:"watched_duration,default:0" json:"watched_duration"`
-
-	// Statistics
-	ViewCount    int64 `bun:"view_count,default:0" json:"view_count"`
-	LikeCount    int64 `bun:"like_count,default:0" json:"like_count"`
-	CommentCount int64 `bun:"comment_count,default:0" json:"comment_count"`
-
-	// Timestamps
-	CreatedAt time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
-	UpdatedAt time.Time  `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updated_at"`
-	DeletedAt *time.Time `bun:"deleted_at,soft_delete,nullzero" json:"-"`
-
-	// Relationships
-	User *User `bun:"rel:belongs-to,join:user_id=id" json:"user,omitempty"`
-}
 
 // VideoStatus represents the status of a video
 type VideoStatus string
@@ -189,4 +152,42 @@ func formatDuration(seconds int64) string {
 	} else {
 		return fmt.Sprintf("%dh %dm", seconds/3600, (seconds%3600)/60)
 	}
+}
+
+type Video struct {
+	bun.BaseModel `bun:"table:videos,alias:v"`
+
+	ID     uuid.UUID `bun:"id,pk,type:uuid,default:uuid_generate_v4()" json:"id"`
+	UserID uuid.UUID `bun:"user_id,type:uuid,notnull" json:"user_id"`
+
+	// YouTube video information
+	YouTubeURL  string `bun:"youtube_url,notnull" json:"youtube_url"`
+	VideoID     string `bun:"video_id,notnull" json:"video_id"`
+	Title       string `bun:"title,notnull" json:"title"`
+	Description string `bun:"description" json:"description"`
+
+	// Video metadata
+	ThumbnailURL string     `bun:"thumbnail_url" json:"thumbnail_url"`
+	Duration     int        `bun:"duration" json:"duration"` // Duration in seconds
+	PublishedAt  *time.Time `bun:"published_at" json:"published_at"`
+	ChannelID    string     `bun:"channel_id" json:"channel_id"`
+	ChannelTitle string     `bun:"channel_title" json:"channel_title"`
+
+	// AI and analytics
+	AISummary            string     `bun:"ai_summary" json:"ai_summary"`
+	AISummaryGeneratedAt *time.Time `bun:"ai_summary_generated_at" json:"ai_summary_generated_at"`
+	WatchedDuration      int        `bun:"watched_duration,default:0" json:"watched_duration"`
+
+	// Statistics
+	ViewCount    int64 `bun:"view_count,default:0" json:"view_count"`
+	LikeCount    int64 `bun:"like_count,default:0" json:"like_count"`
+	CommentCount int64 `bun:"comment_count,default:0" json:"comment_count"`
+
+	// Timestamps
+	CreatedAt time.Time  `bun:"created_at,nullzero,notnull,default:current_timestamp" json:"created_at"`
+	UpdatedAt time.Time  `bun:"updated_at,nullzero,notnull,default:current_timestamp" json:"updated_at"`
+	DeletedAt *time.Time `bun:"deleted_at,soft_delete,nullzero" json:"-"`
+
+	// Relationships
+	User *User `bun:"rel:belongs-to,join:user_id=id" json:"user,omitempty"`
 }

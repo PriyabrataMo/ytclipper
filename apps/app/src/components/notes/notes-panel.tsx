@@ -157,8 +157,7 @@ export const NotesPanel = ({
 
   const handleUpdateNote = async (id: string) => {
     try {
-      console.log('Updating note:', id, editingNote);
-      const result = await updateTimestamp({
+      await updateTimestamp({
         id,
         data: {
           title: editingNote.title,
@@ -166,7 +165,6 @@ export const NotesPanel = ({
           tags: editingNote.tags,
         },
       }).unwrap();
-      console.log('Update successful:', result);
       setIsEditingNote(null);
       setEditingNote({ title: '', note: '', tags: [] });
       setIsPreviewMode(false);
@@ -324,12 +322,12 @@ export const NotesPanel = ({
               <span className='truncate'>Video Notes</span>
             </h2>
             <p className='text-sm text-gray-600 mt-1 truncate'>
-              {notes.length} notes • Current:{' '}
+              {timestampsData?.data.count} notes • Current:{' '}
               {formatTime(timeStampsSliceData.currentTimestamp)}
             </p>
           </div>
           <div className='flex gap-2 flex-shrink-0 ml-2'>
-            {notes.length > 0 && (
+            {timestampsData?.data && timestampsData?.data.count > 0 ? (
               <Button
                 variant='outline'
                 size='sm'
@@ -339,7 +337,7 @@ export const NotesPanel = ({
                 <Download className='h-4 w-4' />
                 Export Notes
               </Button>
-            )}
+            ) : null}
             <Button
               variant='default'
               size='sm'

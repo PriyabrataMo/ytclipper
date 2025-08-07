@@ -1,7 +1,9 @@
 import { AIChat, NotesPanel } from '@/components/notes';
 import { VideoPlayer } from '@/components/video';
+import { useStreamingSummary } from '@/hooks/use-streaming-summary';
+import { useYouTubePlayer } from '@/hooks/youtube-player';
 import { extractVideoId } from '@/lib/utils';
-import { useGenerateSummaryMutation } from '@/services/timestamps';
+import { useGetVideoSummaryQuery } from '@/services/timestamps';
 import {
   Badge,
   Button,
@@ -29,17 +31,36 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { useNavigate, useParams } from 'react-router';
 
 export const TimestampsPage = () => {
   const { videoId } = useParams<{ videoId: string }>();
   const navigate = useNavigate();
   const [videoUrl, setVideoUrl] = useState('');
-  const [summary, setSummary] = useState('');
-  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+  const [fullSummary, setFullSummary] = useState('');
+  const [isGeneratingFullSummary, setIsGeneratingFullSummary] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showAnimation, setShowAnimation] = useState(false);
+  const { data: videoSummary } = useGetVideoSummaryQuery(videoId || '', {
+    skip: !videoId,
+    refetchOnMountOrArgChange: true,
+  });
 
-  const [generateSummary] = useGenerateSummaryMutation();
+  useEffect(() => {
+    if (videoSummary) {
+      setFullSummary(videoSummary.data.summary);
+      if (videoSummary.data.cached) {
+        toast('Full video summary retrieved from cache!', {
+          description: 'Using previously generated comprehensive summary.',
+        });
+      }
+    }
+  }, [videoSummary]);
+
+  const { seekTo } = useYouTubePlayer();
+  const { isStreaming, streamedText, progress, generateStreamingSummary } =
+    useStreamingSummary();
 
   function useIsLargeScreen() {
     const [isLargeScreen, setIsLargeScreen] = useState(false);
@@ -75,29 +96,46 @@ export const TimestampsPage = () => {
     }
   };
 
-  const handleGenerateSummary = async () => {
+  const handleGenerateFullVideoSummary = async () => {
     if (!videoId) {
       return;
     }
 
-    setIsGeneratingSummary(true);
-    try {
-      const response = await generateSummary({
-        video_id: videoId,
-        type: 'brief',
-      }).unwrap();
+    setIsGeneratingFullSummary(true);
+    setShowAnimation(true);
 
-      setSummary(response.data.summary);
-      toast('Summary generated successfully!', {
-        description: 'AI has analyzed your video notes and created a summary.',
-      });
+    try {
+      await generateStreamingSummary(
+        videoId,
+        true,
+        (data) => {
+          setFullSummary(data.summary);
+          if (data.cached) {
+            toast('Full video summary retrieved from cache!', {
+              description: 'Using previously generated comprehensive summary.',
+            });
+          } else {
+            toast('Full video summary generated successfully!', {
+              description:
+                'AI has analyzed the entire video transcript and created a comprehensive summary.',
+            });
+          }
+        },
+        (error) => {
+          console.error('Failed to generate full video summary:', error);
+          toast('Failed to generate full video summary', {
+            description: 'Please try again later.',
+          });
+        },
+      );
     } catch (error) {
-      console.error('Failed to generate summary:', error);
-      toast('Failed to generate summary', {
+      console.error('Failed to generate full video summary:', error);
+      toast('Failed to generate full video summary', {
         description: 'Please try again later.',
       });
     } finally {
-      setIsGeneratingSummary(false);
+      setIsGeneratingFullSummary(false);
+      setTimeout(() => setShowAnimation(false), 1000);
     }
   };
 
@@ -168,19 +206,20 @@ export const TimestampsPage = () => {
                 </div>
               </div>
 
+              {/* Full Video Summary Card */}
               <Card className='mt-4'>
                 <CardHeader className='pb-3'>
                   <div className='flex items-center justify-between'>
                     <CardTitle className='text-lg flex items-center gap-2'>
-                      <FileText className='h-5 w-5' />
-                      Video Summary
+                      <Bot className='h-5 w-5' />
+                      Full Video Analysis
                     </CardTitle>
                     <div className='flex gap-2'>
-                      {summary ? (
+                      {fullSummary ? (
                         <Button
                           variant='outline'
                           size='sm'
-                          onClick={() => copyToClipboard(summary)}
+                          onClick={() => copyToClipboard(fullSummary)}
                         >
                           {copied ? (
                             <Check className='h-4 w-4 text-green-600' />
@@ -189,50 +228,223 @@ export const TimestampsPage = () => {
                           )}
                         </Button>
                       ) : null}
-                      <Button
-                        size='sm'
-                        onClick={handleGenerateSummary}
-                        disabled={isGeneratingSummary}
-                        className='h-10 px-4'
-                      >
-                        {isGeneratingSummary ? (
-                          <>
-                            <Loader2 className='h-4 w-4 mr-2 animate-spin' />
-                            Generating...
-                          </>
-                        ) : (
-                          <>
-                            <Sparkles className='h-4 w-4 mr-2' />
-                            Generate Summary
-                          </>
-                        )}
-                      </Button>
+                      <div className='flex gap-2'>
+                        <Button
+                          size='sm'
+                          onClick={handleGenerateFullVideoSummary}
+                          disabled={isGeneratingFullSummary}
+                          className='h-10 px-4 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white'
+                        >
+                          {isGeneratingFullSummary ? (
+                            <>
+                              <Loader2 className='h-4 w-4 mr-2 animate-spin' />
+                              Analyzing...
+                            </>
+                          ) : (
+                            <>
+                              <Sparkles className='h-4 w-4 mr-2' />
+                              Full Analysis
+                            </>
+                          )}
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </CardHeader>
                 <CardContent>
-                  {summary ? (
+                  {showAnimation && isGeneratingFullSummary ? (
+                    <div className='mb-4 p-4 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg border border-purple-200'>
+                      <div className='flex items-center justify-center space-x-2'>
+                        <div className='animate-pulse'>
+                          <div className='w-2 h-2 bg-purple-500 rounded-full' />
+                        </div>
+                        <div className='animate-pulse delay-100'>
+                          <div className='w-2 h-2 bg-blue-500 rounded-full' />
+                        </div>
+                        <div className='animate-pulse delay-200'>
+                          <div className='w-2 h-2 bg-purple-500 rounded-full' />
+                        </div>
+                        <span className='text-sm text-purple-700 font-medium'>
+                          AI is analyzing the full video transcript...
+                        </span>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  {fullSummary || streamedText ? (
                     <div className='space-y-3'>
-                      <div className='bg-gray-50 rounded-lg p-4 text-sm text-gray-700 whitespace-pre-wrap'>
-                        {summary}
+                      <div className='bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg p-4 text-sm text-gray-700 border border-purple-200 prose prose-sm max-w-none'>
+                        {isStreaming ? (
+                          <div className='space-y-4'>
+                            <div className='text-sm text-gray-600 whitespace-pre-wrap'>
+                              {streamedText}
+                              <span className='animate-pulse'>|</span>
+                            </div>
+                            <div className='w-full bg-gray-200 rounded-full h-2'>
+                              <div
+                                className='bg-gradient-to-r from-purple-500 to-blue-500 h-2 rounded-full transition-all duration-300'
+                                style={{ width: `${progress}%` }}
+                              />
+                            </div>
+                            <div className='text-xs text-gray-500 text-center'>
+                              Generating summary... {Math.round(progress)}%
+                            </div>
+                          </div>
+                        ) : (
+                          <ReactMarkdown
+                            components={{
+                              h1: ({ children }) => (
+                                <h1 className='text-xl font-bold text-gray-900 mb-4'>
+                                  {children}
+                                </h1>
+                              ),
+                              h2: ({ children }) => (
+                                <h2 className='text-lg font-semibold text-gray-800 mb-3 mt-6'>
+                                  {children}
+                                </h2>
+                              ),
+                              h3: ({ children }) => (
+                                <h3 className='text-base font-medium text-gray-700 mb-2 mt-4'>
+                                  {children}
+                                </h3>
+                              ),
+                              strong: ({ children }) => (
+                                <strong className='font-semibold text-gray-900'>
+                                  {children}
+                                </strong>
+                              ),
+                              em: ({ children }) => (
+                                <em className='italic text-gray-700'>
+                                  {children}
+                                </em>
+                              ),
+                              li: ({ children }) => {
+                                const text = children?.toString() || '';
+                                const timestampMatch =
+                                  text.match(/\[(\d{2}):(\d{2})\]/);
+
+                                if (timestampMatch) {
+                                  return (
+                                    <li className='mb-1 text-gray-700'>
+                                      {text
+                                        .split(/\[(\d{2}):(\d{2})\]/)
+                                        .map((part, index) => {
+                                          const key = `${part}-${index}`;
+                                          if (part.match(/^\d{2}:\d{2}$/)) {
+                                            const minutes = parseInt(
+                                              part.split(':')[0],
+                                              10,
+                                            );
+                                            const seconds = parseInt(
+                                              part.split(':')[1],
+                                              10,
+                                            );
+                                            const totalSeconds =
+                                              minutes * 60 + seconds;
+                                            return (
+                                              <button
+                                                key={key}
+                                                onClick={() => {
+                                                  seekTo(totalSeconds);
+                                                  toast(
+                                                    'Jumping to timestamp',
+                                                    {
+                                                      description: `Seeking to [${part}]`,
+                                                    },
+                                                  );
+                                                }}
+                                                className='text-blue-600 font-semibold cursor-pointer hover:text-blue-800 hover:underline mx-1'
+                                              >
+                                                [{part}]
+                                              </button>
+                                            );
+                                          }
+                                          return part;
+                                        })}
+                                    </li>
+                                  );
+                                }
+
+                                return (
+                                  <li className='mb-1 text-gray-700'>
+                                    {children}
+                                  </li>
+                                );
+                              },
+                              ul: ({ children }) => (
+                                <ul className='list-disc list-inside mb-4 space-y-1'>
+                                  {children}
+                                </ul>
+                              ),
+                              ol: ({ children }) => (
+                                <ol className='list-decimal list-inside mb-4 space-y-1'>
+                                  {children}
+                                </ol>
+                              ),
+                              p: ({ children }) => (
+                                <p className='mb-3 text-gray-700 leading-relaxed'>
+                                  {children}
+                                </p>
+                              ),
+                              code: ({ children }) => (
+                                <code className='bg-gray-100 px-1 py-0.5 rounded text-sm font-mono'>
+                                  {children}
+                                </code>
+                              ),
+                            }}
+                          >
+                            {fullSummary}
+                          </ReactMarkdown>
+                        )}
                       </div>
                       <div className='flex flex-wrap gap-2'>
-                        <Badge variant='outline'>#ai-generated</Badge>
-                        <Badge variant='outline'>#video-summary</Badge>
-                        <Badge variant='outline'>#key-points</Badge>
+                        <Badge
+                          variant='outline'
+                          className='bg-purple-100 text-purple-700 border-purple-300'
+                        >
+                          #full-analysis
+                        </Badge>
+                        <Badge
+                          variant='outline'
+                          className='bg-blue-100 text-blue-700 border-blue-300'
+                        >
+                          #transcript
+                        </Badge>
+                        <Badge
+                          variant='outline'
+                          className='bg-green-100 text-green-700 border-green-300'
+                        >
+                          #timestamps
+                        </Badge>
                       </div>
                     </div>
                   ) : (
                     <div className='space-y-3'>
                       <p className='text-sm text-muted-foreground'>
-                        This area will contain an AI-generated summary of the
-                        video content, key points, and important timestamps once
-                        you generate it.
+                        Generate a comprehensive analysis of the entire video
+                        using AI transcript analysis. This includes key moments
+                        with clickable timestamps, main takeaways, and detailed
+                        insights.
                       </p>
                       <div className='flex flex-wrap gap-2'>
-                        <Badge variant='outline'>#tutorial</Badge>
-                        <Badge variant='outline'>#educational</Badge>
-                        <Badge variant='outline'>#programming</Badge>
+                        <Badge
+                          variant='outline'
+                          className='bg-purple-100 text-purple-700 border-purple-300'
+                        >
+                          #ai-analysis
+                        </Badge>
+                        <Badge
+                          variant='outline'
+                          className='bg-blue-100 text-blue-700 border-blue-300'
+                        >
+                          #comprehensive
+                        </Badge>
+                        <Badge
+                          variant='outline'
+                          className='bg-green-100 text-green-700 border-green-300'
+                        >
+                          #clickable-timestamps
+                        </Badge>
                       </div>
                     </div>
                   )}

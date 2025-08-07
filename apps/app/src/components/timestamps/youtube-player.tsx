@@ -212,7 +212,6 @@ export const YouTubePlayer = forwardRef<YouTubePlayerRef, YouTubePlayerProps>(
 
     useEffect(() => {
       onVideoMetadataRef.current = onVideoMetadata;
-      console.log('onVideoMetadataRef', onVideoMetadataRef.current);
     }, [onVideoMetadata]);
 
     useEffect(() => {
