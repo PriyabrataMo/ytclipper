@@ -4,9 +4,12 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
+  toast,
 } from '@ytclipper/ui';
 import { Check, Crown, Sparkles, Star, Zap } from 'lucide-react';
 import { Link } from 'react-router';
+
+import { usePurchaseSubscriptionMutation } from '@/services/subscription';
 
 interface PricingPlan {
   name: string;
@@ -24,14 +27,15 @@ interface PricingPlan {
 
 const plans: PricingPlan[] = [
   {
-    name: 'Starter',
+    name: 'Free',
     description: 'Perfect for getting started with video note-taking',
     price: 'Free',
     billingCycle: 'Forever',
     features: [
       'Up to 5 videos',
-      '8 notes per video',
-      'Basic AI summaries',
+      '40 notes total',
+      '3 AI summaries',
+      '10 AI questions',
       'Standard support',
       'Basic tag management',
     ],
@@ -40,14 +44,15 @@ const plans: PricingPlan[] = [
     buttonVariant: 'outline',
   },
   {
-    name: 'Monthly',
+    name: 'Monthly Pro',
     description: 'Flexible monthly billing',
     price: '$9.99',
     billingCycle: 'per month',
     features: [
-      'Unlimited videos',
-      'Unlimited notes per video',
-      'Advanced AI summaries & insights',
+      '50 videos',
+      '200 notes total',
+      '50 AI summaries',
+      '200 AI questions',
       'Custom tags & categories',
       'Export to multiple formats',
       'Advanced analytics',
@@ -58,16 +63,17 @@ const plans: PricingPlan[] = [
     buttonVariant: 'outline',
   },
   {
-    name: 'Quarterly',
+    name: 'Quarterly Pro',
     description: 'Save 10% with 3-month billing',
     price: '$26.97',
     originalPrice: '$29.97',
     billingCycle: 'every 3 months',
     savings: 'Save 10%',
     features: [
-      'Unlimited videos',
-      'Unlimited notes per video',
-      'Advanced AI summaries & insights',
+      '150 videos',
+      '600 notes total',
+      '150 AI summaries',
+      '600 AI questions',
       'Custom tags & categories',
       'Export to multiple formats',
       'Advanced analytics',
@@ -79,36 +85,17 @@ const plans: PricingPlan[] = [
     buttonVariant: 'default',
   },
   {
-    name: 'Semi-Annual',
-    description: 'Save 20% with 6-month billing',
-    price: '$47.94',
-    originalPrice: '$59.94',
-    billingCycle: 'every 6 months',
-    savings: 'Save 20%',
-    features: [
-      'Unlimited videos',
-      'Unlimited notes per video',
-      'Advanced AI summaries & insights',
-      'Custom tags & categories',
-      'Export to multiple formats',
-      'Advanced analytics',
-      'API access',
-    ],
-    icon: <Sparkles className='h-6 w-6' />,
-    buttonText: 'Start Semi-Annual Plan',
-    buttonVariant: 'outline',
-  },
-  {
-    name: 'Annual',
+    name: 'Annual Pro',
     description: 'Save 30% with yearly billing',
     price: '$83.88',
     originalPrice: '$119.88',
     billingCycle: 'per year',
     savings: 'Save 30%',
     features: [
-      'Unlimited videos',
-      'Unlimited notes per video',
-      'Advanced AI summaries & insights',
+      '500 videos',
+      '2000 notes total',
+      '500 AI summaries',
+      '2000 AI questions',
       'Custom tags & categories',
       'Export to multiple formats',
       'Advanced analytics',
@@ -121,6 +108,36 @@ const plans: PricingPlan[] = [
 ];
 
 export const PricingPage = () => {
+  const [purchaseSubscription, { isLoading: isPurchasing }] =
+    usePurchaseSubscriptionMutation();
+
+  const handlePurchase = async (
+    planType: 'free' | 'monthly' | 'quarterly' | 'annual',
+  ) => {
+    try {
+      const response = await purchaseSubscription({
+        plan_type: planType,
+      }).unwrap();
+
+      if (response.success) {
+        toast.success(`Successfully started ${planType} plan!`);
+
+        // If there's a payment URL, redirect to payment gateway
+        if (response.data.payment_url) {
+          window.location.href = response.data.payment_url;
+        } else {
+          // For free plans or immediate activation, redirect to dashboard
+          window.location.href = '/dashboard';
+        }
+      } else {
+        toast.error('Failed to purchase subscription');
+      }
+    } catch (error) {
+      console.error('Purchase error:', error);
+      toast.error('Failed to purchase subscription. Please try again.');
+    }
+  };
+
   return (
     <div className='min-h-screen bg-gradient-to-br from-orange-50 via-white to-orange-50'>
       <div className='max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16'>
@@ -200,8 +217,20 @@ export const PricingPage = () => {
                   variant={plan.buttonVariant}
                   className='w-full flex-shrink-0'
                   size='sm'
+                  onClick={() => {
+                    const planType =
+                      plan.name === 'Free'
+                        ? 'free'
+                        : plan.name === 'Monthly Pro'
+                          ? 'monthly'
+                          : plan.name === 'Quarterly Pro'
+                            ? 'quarterly'
+                            : 'annual';
+                    handlePurchase(planType);
+                  }}
+                  disabled={isPurchasing}
                 >
-                  {plan.buttonText}
+                  {isPurchasing ? 'Processing...' : plan.buttonText}
                 </Button>
               </CardContent>
             </Card>

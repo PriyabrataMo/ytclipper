@@ -123,16 +123,83 @@ export const TimestampsPage = () => {
         },
         (error) => {
           console.error('Failed to generate full video summary:', error);
-          toast('Failed to generate full video summary', {
-            description: 'Please try again later.',
-          });
+
+          const errorData = error as {
+            data?: {
+              error?: { code?: string; details?: { feature?: string } };
+            };
+          };
+          if (errorData?.data?.error?.code === 'USAGE_LIMIT_EXCEEDED') {
+            const feature = errorData?.data?.error?.details?.feature;
+            let message = 'Usage limit exceeded for your current plan.';
+
+            if (feature === 'ai_summaries') {
+              message =
+                'You have reached the AI summary limit for your current plan.';
+            } else if (feature === 'videos') {
+              message =
+                'You have reached the video limit for your current plan.';
+            } else if (feature === 'notes') {
+              message =
+                'You have reached the note limit for your current plan.';
+            } else if (feature === 'ai_questions') {
+              message =
+                'You have reached the AI question limit for your current plan.';
+            }
+
+            toast.error(message, {
+              description: 'Upgrade your plan to continue using this feature.',
+              action: {
+                label: 'Upgrade Now',
+                onClick: () => {
+                  window.location.href = '/pricing';
+                },
+              },
+            });
+          } else {
+            toast('Failed to generate full video summary', {
+              description: 'Please try again later.',
+            });
+          }
         },
       );
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Failed to generate full video summary:', error);
-      toast('Failed to generate full video summary', {
-        description: 'Please try again later.',
-      });
+
+      // Check if it's a usage limit exceeded error
+      const errorData = error as {
+        data?: { error?: { code?: string; details?: { feature?: string } } };
+      };
+      if (errorData?.data?.error?.code === 'USAGE_LIMIT_EXCEEDED') {
+        const feature = errorData?.data?.error?.details?.feature;
+        let message = 'Usage limit exceeded for your current plan.';
+
+        if (feature === 'ai_summaries') {
+          message =
+            'You have reached the AI summary limit for your current plan.';
+        } else if (feature === 'videos') {
+          message = 'You have reached the video limit for your current plan.';
+        } else if (feature === 'notes') {
+          message = 'You have reached the note limit for your current plan.';
+        } else if (feature === 'ai_questions') {
+          message =
+            'You have reached the AI question limit for your current plan.';
+        }
+
+        toast.error(message, {
+          description: 'Upgrade your plan to continue using this feature.',
+          action: {
+            label: 'Upgrade Now',
+            onClick: () => {
+              window.location.href = '/pricing';
+            },
+          },
+        });
+      } else {
+        toast('Failed to generate full video summary', {
+          description: 'Please try again later.',
+        });
+      }
     } finally {
       setIsGeneratingFullSummary(false);
       setTimeout(() => setShowAnimation(false), 1000);

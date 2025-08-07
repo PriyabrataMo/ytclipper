@@ -30,6 +30,7 @@ import {
   DialogTitle,
   Input,
   ScrollArea,
+  toast,
 } from '@ytclipper/ui';
 import {
   Clock,
@@ -149,8 +150,42 @@ export const NotesPanel = ({
         setIsAddingNote(false);
         onResumeVideo?.();
         refetch();
-      } catch (error) {
-        console.error('Failed to create note:', error);
+        toast.success('Note created successfully!');
+      } catch (error: unknown) {
+        // Check if it's a usage limit exceeded error
+        const errorData = error as {
+          data?: { error?: { code?: string; details?: { feature?: string } } };
+        };
+        if (errorData?.data?.error?.code === 'USAGE_LIMIT_EXCEEDED') {
+          const feature = errorData?.data?.error?.details?.feature;
+          let message = 'Usage limit exceeded for your current plan.';
+
+          if (feature === 'notes') {
+            message = 'You have reached the note limit for your current plan.';
+          } else if (feature === 'videos') {
+            message = 'You have reached the video limit for your current plan.';
+          } else if (feature === 'ai_summaries') {
+            message =
+              'You have reached the AI summary limit for your current plan.';
+          } else if (feature === 'ai_questions') {
+            message =
+              'You have reached the AI question limit for your current plan.';
+          }
+
+          toast.error(message, {
+            description: 'Upgrade your plan to continue using this feature.',
+            action: {
+              label: 'Upgrade Now',
+              onClick: () => {
+                // Navigate to pricing page
+                window.location.href = '/pricing';
+              },
+            },
+          });
+        } else {
+          // Generic error
+          toast.error('Failed to create note. Please try again.');
+        }
       }
     }
   };
@@ -169,8 +204,10 @@ export const NotesPanel = ({
       setEditingNote({ title: '', note: '', tags: [] });
       setIsPreviewMode(false);
       refetch();
-    } catch (error) {
+      toast.success('Note updated successfully!');
+    } catch (error: unknown) {
       console.error('Failed to update note:', error);
+      toast.error('Failed to update note. Please try again.');
     }
   };
 
@@ -179,8 +216,10 @@ export const NotesPanel = ({
       await deleteTimestamp(id).unwrap();
       setNoteToDelete(null);
       refetch();
-    } catch (error) {
+      toast.success('Note deleted successfully!');
+    } catch (error: unknown) {
       console.error('Failed to delete note:', error);
+      toast.error('Failed to delete note. Please try again.');
     }
   };
 

@@ -2,6 +2,8 @@ package videos
 
 import (
 	"context"
+	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -12,15 +14,18 @@ import (
 	authhandlers "github.com/shubhamku044/ytclipper/internal/handlers/auth"
 	"github.com/shubhamku044/ytclipper/internal/middleware"
 	"github.com/shubhamku044/ytclipper/internal/models"
+	"github.com/shubhamku044/ytclipper/internal/services"
 )
 
 type VideoHandlers struct {
-	db *database.Database
+	db                  *database.Database
+	featureUsageService *services.FeatureUsageService
 }
 
 func NewVideoHandlers(db *database.Database) *VideoHandlers {
 	return &VideoHandlers{
-		db: db,
+		db:                  db,
+		featureUsageService: services.NewFeatureUsageService(db),
 	}
 }
 
@@ -273,6 +278,14 @@ func (v *VideoHandlers) CreateOrUpdateVideo(ctx context.Context, userID uuid.UUI
 		Scan(ctx)
 
 	if err != nil {
+		canAdd, err := v.featureUsageService.CheckUsageLimit(ctx, userID, "videos")
+		if err != nil {
+			return err
+		}
+		if !canAdd {
+			return fmt.Errorf("video limit exceeded for your current plan")
+		}
+
 		video := &models.Video{
 			UserID:  userID,
 			VideoID: videoID,
@@ -283,7 +296,16 @@ func (v *VideoHandlers) CreateOrUpdateVideo(ctx context.Context, userID uuid.UUI
 			Model(video).
 			Exec(ctx)
 
-		return err
+		if err != nil {
+			return err
+		}
+
+		err = v.featureUsageService.IncrementUsage(ctx, userID, "videos")
+		if err != nil {
+			log.Printf("Warning: Failed to increment video usage: %v", err)
+		}
+
+		return nil
 	}
 
 	return nil
@@ -309,6 +331,15 @@ func (v *VideoHandlers) CreateVideoIfNotExists(ctx context.Context, userID uuid.
 	}
 
 	if !exists {
+		// Check usage limit before creating video
+		canAdd, err := v.featureUsageService.CheckUsageLimit(ctx, userID, "videos")
+		if err != nil {
+			return err
+		}
+		if !canAdd {
+			return fmt.Errorf("video limit exceeded for your current plan")
+		}
+
 		video := &models.Video{
 			UserID:     userID,
 			VideoID:    videoID,
@@ -320,7 +351,17 @@ func (v *VideoHandlers) CreateVideoIfNotExists(ctx context.Context, userID uuid.
 			Model(video).
 			Exec(ctx)
 
-		return err
+		if err != nil {
+			return err
+		}
+
+		err = v.featureUsageService.IncrementUsage(ctx, userID, "videos")
+		if err != nil {
+			// Log error but don't fail the video creation
+			log.Printf("Warning: Failed to increment video usage: %v", err)
+		}
+
+		return nil
 	}
 
 	return nil
@@ -394,6 +435,20 @@ func (v *VideoHandlers) UpdateVideoMetadataHandler(c *gin.Context) {
 	}
 
 	if !exists {
+		canAdd, err := v.featureUsageService.CheckUsageLimit(ctx, userID, "videos")
+		if err != nil {
+			middleware.RespondWithError(c, http.StatusInternalServerError, "USAGE_CHECK_ERROR", "Failed to check usage limit", gin.H{
+				"error": err.Error(),
+			})
+			return
+		}
+		if !canAdd {
+			middleware.RespondWithError(c, http.StatusForbidden, "USAGE_LIMIT_EXCEEDED", "Video limit exceeded for your current plan", gin.H{
+				"feature": "videos",
+			})
+			return
+		}
+
 		video := &models.Video{
 			UserID:     userID,
 			VideoID:    req.VideoID,
@@ -421,6 +476,12 @@ func (v *VideoHandlers) UpdateVideoMetadataHandler(c *gin.Context) {
 				"error": err.Error(),
 			})
 			return
+		}
+
+		// Increment usage after successful video creation
+		err = v.featureUsageService.IncrementUsage(ctx, userID, "videos")
+		if err != nil {
+			log.Printf("Warning: Failed to increment video usage: %v", err)
 		}
 
 		middleware.RespondWithOK(c, gin.H{
@@ -479,6 +540,15 @@ func (v *VideoHandlers) GetOrCreateVideoByYouTubeURL(ctx context.Context, userID
 		return video, nil
 	}
 
+	// Check usage limit before creating video
+	canAdd, err := v.featureUsageService.CheckUsageLimit(ctx, userID, "videos")
+	if err != nil {
+		return nil, err
+	}
+	if !canAdd {
+		return nil, fmt.Errorf("video limit exceeded for your current plan")
+	}
+
 	newVideo := &models.Video{
 		UserID:     userID,
 		VideoID:    videoID,
@@ -492,6 +562,11 @@ func (v *VideoHandlers) GetOrCreateVideoByYouTubeURL(ctx context.Context, userID
 
 	if insertErr != nil {
 		return nil, insertErr
+	}
+
+	err = v.featureUsageService.IncrementUsage(ctx, userID, "videos")
+	if err != nil {
+		log.Printf("Warning: Failed to increment video usage: %v", err)
 	}
 
 	return newVideo, nil
@@ -540,6 +615,21 @@ func (v *VideoHandlers) UpdateWatchedDurationHandler(c *gin.Context) {
 
 	if err != nil {
 		if err.Error() == "no rows in result set" {
+			// Check usage limit before creating video
+			canAdd, err := v.featureUsageService.CheckUsageLimit(ctx, userID, "videos")
+			if err != nil {
+				middleware.RespondWithError(c, http.StatusInternalServerError, "USAGE_CHECK_ERROR", "Failed to check usage limit", gin.H{
+					"error": err.Error(),
+				})
+				return
+			}
+			if !canAdd {
+				middleware.RespondWithError(c, http.StatusForbidden, "USAGE_LIMIT_EXCEEDED", "Video limit exceeded for your current plan", gin.H{
+					"feature": "videos",
+				})
+				return
+			}
+
 			video := &models.Video{
 				UserID:          userID,
 				VideoID:         videoID,
@@ -555,6 +645,11 @@ func (v *VideoHandlers) UpdateWatchedDurationHandler(c *gin.Context) {
 					"error": err.Error(),
 				})
 				return
+			}
+
+			err = v.featureUsageService.IncrementUsage(ctx, userID, "videos")
+			if err != nil {
+				log.Printf("Warning: Failed to increment video usage: %v", err)
 			}
 
 			middleware.RespondWithOK(c, gin.H{
