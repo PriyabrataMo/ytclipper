@@ -21,7 +21,7 @@ func NewFeatureHandlers(featureAccessService *services.FeatureAccessService) *Fe
 
 // GetUserFeatureUsage returns the current usage for all features
 func (h *FeatureHandlers) GetUserFeatureUsage(c *gin.Context) {
-	user, exists := getUser(c)
+	user, exists := middleware.GetUser(c)
 	if !exists {
 		middleware.RespondWithError(c, http.StatusUnauthorized, "UNAUTHORIZED", "User not authenticated", nil)
 		return
@@ -41,7 +41,7 @@ func (h *FeatureHandlers) GetUserFeatureUsage(c *gin.Context) {
 
 // CheckFeatureAccess checks if user can access a specific feature
 func (h *FeatureHandlers) CheckFeatureAccess(c *gin.Context) {
-	user, exists := getUser(c)
+	user, exists := middleware.GetUser(c)
 	if !exists {
 		middleware.RespondWithError(c, http.StatusUnauthorized, "UNAUTHORIZED", "User not authenticated", nil)
 		return
@@ -78,7 +78,7 @@ func (h *FeatureHandlers) CheckFeatureAccess(c *gin.Context) {
 
 // Example handler that requires video feature access
 func (h *FeatureHandlers) CreateVideo(c *gin.Context) {
-	user, exists := getUser(c)
+	user, exists := middleware.GetUser(c)
 	if !exists {
 		middleware.RespondWithError(c, http.StatusUnauthorized, "UNAUTHORIZED", "User not authenticated", nil)
 		return
@@ -113,7 +113,7 @@ func (h *FeatureHandlers) CreateVideo(c *gin.Context) {
 
 // Example handler that requires AI summaries feature access
 func (h *FeatureHandlers) GenerateAISummary(c *gin.Context) {
-	user, exists := getUser(c)
+	user, exists := middleware.GetUser(c)
 	if !exists {
 		middleware.RespondWithError(c, http.StatusUnauthorized, "UNAUTHORIZED", "User not authenticated", nil)
 		return
@@ -142,7 +142,7 @@ func (h *FeatureHandlers) GenerateAISummary(c *gin.Context) {
 
 // Example handler that requires custom tags feature access
 func (h *FeatureHandlers) CreateCustomTag(c *gin.Context) {
-	user, exists := getUser(c)
+	user, exists := middleware.GetUser(c)
 	if !exists {
 		middleware.RespondWithError(c, http.StatusUnauthorized, "UNAUTHORIZED", "User not authenticated", nil)
 		return

@@ -15,21 +15,24 @@ import (
 	"github.com/shubhamku044/ytclipper/internal/handlers/videos"
 	"github.com/shubhamku044/ytclipper/internal/middleware"
 	"github.com/shubhamku044/ytclipper/internal/models"
+	"github.com/shubhamku044/ytclipper/internal/services"
 )
 
 type TimestampsHandlers struct {
-	db            *database.Database
-	aiService     *AIService
-	tagService    *TagService
-	videoHandlers *videos.VideoHandlers
+	db                  *database.Database
+	aiService           *AIService
+	tagService          *TagService
+	videoHandlers       *videos.VideoHandlers
+	featureUsageService *services.FeatureUsageService
 }
 
 func NewTimestampsHandlers(db *database.Database, openaiAPIKey *config.OpenAIConfig) *TimestampsHandlers {
 	return &TimestampsHandlers{
-		db:            db,
-		aiService:     NewAIService(openaiAPIKey, db),
-		tagService:    NewTagService(db),
-		videoHandlers: videos.NewVideoHandlers(db),
+		db:                  db,
+		aiService:           NewAIService(openaiAPIKey, db),
+		tagService:          NewTagService(db),
+		videoHandlers:       videos.NewVideoHandlers(db),
+		featureUsageService: services.NewFeatureUsageService(db),
 	}
 }
 
@@ -145,6 +148,21 @@ func (t *TimestampsHandlers) CreateTimestamp(c *gin.Context) {
 		}
 	}
 
+	// Check note usage limit before creating timestamp
+	canAdd, err := t.featureUsageService.CheckUsageLimit(ctx, userID, "notes")
+	if err != nil {
+		middleware.RespondWithError(c, http.StatusInternalServerError, "USAGE_CHECK_ERROR", "Failed to check usage limit", gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+	if !canAdd {
+		middleware.RespondWithError(c, http.StatusForbidden, "USAGE_LIMIT_EXCEEDED", "Note limit exceeded for your current plan", gin.H{
+			"feature": "notes",
+		})
+		return
+	}
+
 	timestamp := models.Timestamp{
 		UserID:    userID,
 		VideoID:   req.VideoID,
@@ -184,6 +202,13 @@ func (t *TimestampsHandlers) CreateTimestamp(c *gin.Context) {
 			"error": err.Error(),
 		})
 		return
+	}
+
+	// Increment usage after successful timestamp creation
+	err = t.featureUsageService.IncrementUsage(ctx, userID, "notes")
+	if err != nil {
+		// Log error but don't fail the timestamp creation
+		log.Printf("Warning: Failed to increment note usage: %v", err)
 	}
 
 	if t.aiService != nil {

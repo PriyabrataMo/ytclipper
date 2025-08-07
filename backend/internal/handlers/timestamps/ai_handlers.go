@@ -263,6 +263,20 @@ func (t *TimestampsHandlers) GenerateFullVideoSummary(c *gin.Context) {
 		placeholderTitle := "Video " + req.VideoID
 		placeholderURL := "https://youtube.com/watch?v=" + req.VideoID
 
+		canAdd, err := t.featureUsageService.CheckUsageLimit(context.Background(), userID, "videos")
+		if err != nil {
+			middleware.RespondWithError(c, http.StatusInternalServerError, "USAGE_CHECK_ERROR", "Failed to check usage limit", gin.H{
+				"error": err.Error(),
+			})
+			return
+		}
+		if !canAdd {
+			middleware.RespondWithError(c, http.StatusForbidden, "USAGE_LIMIT_EXCEEDED", "Video limit exceeded for your current plan", gin.H{
+				"feature": "videos",
+			})
+			return
+		}
+
 		video = models.Video{
 			UserID:     userID,
 			VideoID:    req.VideoID,
@@ -279,6 +293,11 @@ func (t *TimestampsHandlers) GenerateFullVideoSummary(c *gin.Context) {
 			})
 			return
 		}
+
+		err = t.featureUsageService.IncrementUsage(context.Background(), userID, "videos")
+		if err != nil {
+			log.Printf("Warning: Failed to increment video usage: %v", err)
+		}
 	}
 
 	if !req.Refresh && video.AISummary != "" && video.AISummaryGeneratedAt != nil {
@@ -288,6 +307,20 @@ func (t *TimestampsHandlers) GenerateFullVideoSummary(c *gin.Context) {
 			"video_title":  video.Title,
 			"generated_at": video.AISummaryGeneratedAt,
 			"cached":       true,
+		})
+		return
+	}
+
+	canGenerate, err := t.featureUsageService.CheckUsageLimit(context.Background(), userID, "ai_summaries")
+	if err != nil {
+		middleware.RespondWithError(c, http.StatusInternalServerError, "USAGE_CHECK_ERROR", "Failed to check usage limit", gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+	if !canGenerate {
+		middleware.RespondWithError(c, http.StatusForbidden, "USAGE_LIMIT_EXCEEDED", "AI summary limit exceeded for your current plan", gin.H{
+			"feature": "ai_summaries",
 		})
 		return
 	}
@@ -365,10 +398,8 @@ func (t *TimestampsHandlers) GenerateFullVideoSummary(c *gin.Context) {
 		c.Header("Access-Control-Allow-Headers", "Cache-Control")
 		c.Header("Access-Control-Allow-Credentials", "true")
 
-		// Flush headers immediately
 		c.Writer.Flush()
 
-		// Stream the summary word by word
 		words := strings.Fields(summary)
 
 		for i, word := range words {
@@ -378,20 +409,17 @@ func (t *TimestampsHandlers) GenerateFullVideoSummary(c *gin.Context) {
 				"total": len(words),
 			}
 
-			// Convert to JSON
 			jsonData, err := json.Marshal(chunkData)
 			if err != nil {
 				continue
 			}
 
-			// Send SSE event in proper format
 			eventData := fmt.Sprintf("event: chunk\ndata: %s\n\n", string(jsonData))
 			c.Writer.WriteString(eventData)
 			c.Writer.Flush()
-			time.Sleep(50 * time.Millisecond) // Adjust speed as needed
+			time.Sleep(50 * time.Millisecond)
 		}
 
-		// Send completion event
 		completeData := gin.H{
 			"summary":      summary,
 			"video_id":     req.VideoID,
@@ -409,7 +437,6 @@ func (t *TimestampsHandlers) GenerateFullVideoSummary(c *gin.Context) {
 			c.Writer.Flush()
 		}
 
-		// Save summary to database even when streaming
 		now := time.Now().UTC()
 		_, err = t.db.DB.NewUpdate().
 			Model(&video).
@@ -421,8 +448,12 @@ func (t *TimestampsHandlers) GenerateFullVideoSummary(c *gin.Context) {
 		if err != nil {
 			log.Printf("Failed to save AI summary to database: %v", err)
 		}
+
+		err = t.featureUsageService.IncrementUsage(context.Background(), userID, "ai_summaries")
+		if err != nil {
+			log.Printf("Warning: Failed to increment AI summary usage: %v", err)
+		}
 	} else {
-		// Regular response
 		now := time.Now().UTC()
 		_, err = t.db.DB.NewUpdate().
 			Model(&video).
@@ -433,6 +464,11 @@ func (t *TimestampsHandlers) GenerateFullVideoSummary(c *gin.Context) {
 
 		if err != nil {
 			log.Printf("Failed to save AI summary to database: %v", err)
+		}
+
+		err = t.featureUsageService.IncrementUsage(context.Background(), userID, "ai_summaries")
+		if err != nil {
+			log.Printf("Warning: Failed to increment AI summary usage: %v", err)
 		}
 
 		middleware.RespondWithOK(c, gin.H{
@@ -524,7 +560,20 @@ func (t *TimestampsHandlers) AnswerQuestion(c *gin.Context) {
 		return
 	}
 
-	// Generate embedding for the question
+	canAsk, err := t.featureUsageService.CheckUsageLimit(context.Background(), userID, "ai_questions")
+	if err != nil {
+		middleware.RespondWithError(c, http.StatusInternalServerError, "USAGE_CHECK_ERROR", "Failed to check usage limit", gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+	if !canAsk {
+		middleware.RespondWithError(c, http.StatusForbidden, "USAGE_LIMIT_EXCEEDED", "AI question limit exceeded for your current plan", gin.H{
+			"feature": "ai_questions",
+		})
+		return
+	}
+
 	queryEmbedding, err := t.aiService.GenerateEmbedding(req.Question)
 	if err != nil {
 		middleware.RespondWithError(c, http.StatusInternalServerError, "EMBEDDING_ERROR", "Failed to generate question embedding", gin.H{
@@ -536,9 +585,7 @@ func (t *TimestampsHandlers) AnswerQuestion(c *gin.Context) {
 	var contextBuilder strings.Builder
 	contextBuilder.WriteString("# Video Context\n\n")
 
-	// If video_id is provided, try to get transcript embeddings and relevant notes
 	if req.VideoID != "" {
-		// Get transcript embeddings for this video
 		var transcriptEmbeddings []models.TranscriptEmbedding
 		err = t.db.DB.NewSelect().
 			Model(&transcriptEmbeddings).
@@ -548,7 +595,6 @@ func (t *TimestampsHandlers) AnswerQuestion(c *gin.Context) {
 		if err == nil && len(transcriptEmbeddings) > 0 {
 			log.Printf("Found %d transcript embeddings for video %s", len(transcriptEmbeddings), req.VideoID)
 
-			// Find most relevant transcript chunks
 			type ScoredTranscriptChunk struct {
 				Embedding models.TranscriptEmbedding
 				Score     float64
@@ -566,12 +612,10 @@ func (t *TimestampsHandlers) AnswerQuestion(c *gin.Context) {
 				}
 			}
 
-			// Sort by relevance score
 			sort.Slice(scoredChunks, func(i, j int) bool {
 				return scoredChunks[i].Score > scoredChunks[j].Score
 			})
 
-			// Take top relevant chunks
 			contextLimit := req.Context
 			if contextLimit == 0 {
 				contextLimit = 10
@@ -670,7 +714,6 @@ func (t *TimestampsHandlers) AnswerQuestion(c *gin.Context) {
 			}
 		}
 	} else {
-		// If no video_id provided, search across all user notes
 		searchReq := SearchRequest{
 			Query: req.Question,
 			Limit: req.Context,
@@ -735,7 +778,6 @@ func (t *TimestampsHandlers) AnswerQuestion(c *gin.Context) {
 		}
 	}
 
-	// Create enhanced prompt that includes transcript context
 	prompt := fmt.Sprintf(`You are an AI assistant helping answer questions about video content. 
 
 Question: "%s"
@@ -755,10 +797,8 @@ Make your answer helpful, accurate, and well-structured.`,
 		return
 	}
 
-	// Prepare relevant notes for response
 	var relevantNotes []gin.H
 	if req.VideoID != "" {
-		// Get the scored results for the specific video
 		query := t.db.DB.NewSelect().
 			Model((*models.Timestamp)(nil)).
 			Where("user_id = ? AND video_id = ? AND deleted_at IS NULL", userID, req.VideoID)
@@ -782,6 +822,11 @@ Make your answer helpful, accurate, and well-structured.`,
 		}
 	}
 
+	err = t.featureUsageService.IncrementUsage(context.Background(), userID, "ai_questions")
+	if err != nil {
+		log.Printf("Warning: Failed to increment AI question usage: %v", err)
+	}
+
 	middleware.RespondWithOK(c, gin.H{
 		"answer":         answer,
 		"question":       req.Question,
@@ -802,7 +847,6 @@ func formatTimestamp(duration float64) string {
 func (t *TimestampsHandlers) generateYouTubeTranscript(videoID string) (string, error) {
 	client := youtube.Client{}
 
-	// First, try to get video info
 	video, err := client.GetVideo(videoID)
 	if err != nil {
 		if strings.Contains(err.Error(), "400") {
@@ -831,7 +875,6 @@ func (t *TimestampsHandlers) generateYouTubeTranscript(videoID string) (string, 
 	var transcriptText strings.Builder
 	transcriptText.WriteString("TRANSCRIPT WITH TIMESTAMPS:\n\n")
 	for _, entry := range transcript {
-		// Convert StartMs from milliseconds to seconds
 		startTimeSeconds := float64(entry.StartMs) / 1000.0
 		timestamp := formatTimestamp(startTimeSeconds)
 		transcriptText.WriteString(fmt.Sprintf("%s %s\n", timestamp, entry.Text))
@@ -952,7 +995,6 @@ func (t *TimestampsHandlers) generateAndSaveTranscriptEmbedding(userIDStr, video
 			continue
 		}
 
-		// Create transcript embedding record
 		transcriptEmbedding := &models.TranscriptEmbedding{
 			UserID:     userID,
 			VideoID:    videoID,
@@ -963,7 +1005,6 @@ func (t *TimestampsHandlers) generateAndSaveTranscriptEmbedding(userIDStr, video
 			Embedding:  pgvector.NewVector(embedding),
 		}
 
-		// Save to database
 		_, err = t.db.DB.NewInsert().
 			Model(transcriptEmbedding).
 			Exec(context.Background())
