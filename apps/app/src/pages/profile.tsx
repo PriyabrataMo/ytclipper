@@ -1,12 +1,18 @@
+import { useProfile } from '@/hooks/use-profile';
 import {
+  Badge,
   Button,
   Card,
   CardContent,
   CardHeader,
   CardTitle,
+  Progress,
   toast,
 } from '@ytclipper/ui';
 import {
+  AlertTriangle,
+  BarChart3,
+  Calendar,
   CheckCircle2,
   CreditCard,
   Crown,
@@ -29,6 +35,18 @@ export const ProfilePage = () => {
   const navigate = useNavigate();
 
   const [sendOTP, { isLoading: isSending }] = useSendOTPMutation();
+
+  // Get subscription profile data
+  const {
+    profile: subscriptionProfile,
+    isFreePlan,
+    isExpired,
+    isExceeded,
+    getUsagePercentage,
+    getUsageLimit,
+    getCurrentUsage,
+    getSubscriptionStatus,
+  } = useProfile();
 
   if (isLoading) {
     return <ProfileLoader />;
@@ -323,6 +341,82 @@ export const ProfilePage = () => {
                     </ul>
                   </div>
 
+                  {/* Subscription Usage Section */}
+                  {subscriptionProfile ? (
+                    <div className='space-y-4 pt-4 border-t border-gray-200'>
+                      <h4 className='font-medium text-gray-900 flex items-center gap-2'>
+                        <BarChart3 className='w-4 h-4' />
+                        Usage Limits
+                      </h4>
+
+                      <div className='space-y-3'>
+                        {/* Videos Usage */}
+                        <UsageProgress
+                          label='Videos'
+                          current={getCurrentUsage('videos')}
+                          limit={getUsageLimit('videos')}
+                          percentage={getUsagePercentage('videos')}
+                          isUnlimited={!isFreePlan}
+                        />
+
+                        {/* Notes per Video */}
+                        <UsageProgress
+                          label='Notes'
+                          current={getCurrentUsage('notes')}
+                          limit={getUsageLimit('notes')}
+                          percentage={getUsagePercentage('notes')}
+                          isUnlimited={!isFreePlan}
+                        />
+
+                        {/* AI Summaries */}
+                        <UsageProgress
+                          label='AI Summaries'
+                          current={getCurrentUsage('ai_summaries')}
+                          limit={getUsageLimit('ai_summaries')}
+                          percentage={getUsagePercentage('ai_summaries')}
+                          isUnlimited={!isFreePlan}
+                        />
+
+                        {/* AI Questions */}
+                        <UsageProgress
+                          label='AI Questions'
+                          current={getCurrentUsage('ai_questions')}
+                          limit={getUsageLimit('ai_questions')}
+                          percentage={getUsagePercentage('ai_questions')}
+                          isUnlimited={!isFreePlan}
+                        />
+                      </div>
+
+                      {/* Status Badges */}
+                      <div className='flex items-center gap-2 pt-2'>
+                        {isExpired ? (
+                          <Badge variant='destructive'>
+                            <AlertTriangle className='h-3 w-3 mr-1' />
+                            Expired
+                          </Badge>
+                        ) : null}
+                        {isExceeded && isFreePlan ? (
+                          <Badge variant='destructive'>
+                            <XCircle className='h-3 w-3 mr-1' />
+                            Limit Exceeded
+                          </Badge>
+                        ) : null}
+                        {subscriptionProfile.subscription.current_period_end ? (
+                          <Badge variant='outline'>
+                            <Calendar className='h-3 w-3 mr-1' />
+                            {getSubscriptionStatus() === 'expired'
+                              ? 'Expired on'
+                              : 'Renews on'}
+                            :{' '}
+                            {new Date(
+                              subscriptionProfile.subscription.current_period_end,
+                            ).toLocaleDateString()}
+                          </Badge>
+                        ) : null}
+                      </div>
+                    </div>
+                  ) : null}
+
                   {subscription.plan === 'free' ? (
                     <div className='p-4 bg-gradient-to-r from-orange-50 to-orange-100 rounded-lg border border-orange-200'>
                       <div className='flex items-center gap-3 mb-3'>
@@ -482,3 +576,53 @@ export const ProfilePage = () => {
     </div>
   );
 };
+
+// UsageProgress component for displaying usage limits
+interface UsageProgressProps {
+  label: string;
+  current: number;
+  limit: number;
+  percentage: number;
+  isUnlimited: boolean;
+}
+
+function UsageProgress({
+  label,
+  current,
+  limit,
+  percentage,
+  isUnlimited,
+}: UsageProgressProps) {
+  const isExceeded = !isUnlimited && current >= limit;
+
+  return (
+    <div className='space-y-2'>
+      <div className='flex items-center justify-between text-sm'>
+        <span className='font-medium'>{label}</span>
+        <div className='flex items-center gap-2'>
+          <span className='text-gray-600'>
+            {current}
+            {!isUnlimited ? ` / ${limit}` : null}
+            {isUnlimited ? ' / ∞' : null}
+          </span>
+          {isExceeded ? (
+            <XCircle className='h-4 w-4 text-red-500' />
+          ) : (
+            <CheckCircle2 className='h-4 w-4 text-green-500' />
+          )}
+        </div>
+      </div>
+      {!isUnlimited ? (
+        <Progress
+          value={Math.min(percentage, 100)}
+          className={isExceeded ? 'bg-red-100' : ''}
+        />
+      ) : null}
+      {isUnlimited ? (
+        <div className='h-2 bg-gray-100 rounded-full'>
+          <div className='h-2 bg-green-500 rounded-full w-full' />
+        </div>
+      ) : null}
+    </div>
+  );
+}

@@ -11,6 +11,7 @@ import (
 	"github.com/shubhamku044/ytclipper/internal/handlers"
 	authhandlers "github.com/shubhamku044/ytclipper/internal/handlers/auth"
 	"github.com/shubhamku044/ytclipper/internal/handlers/dashboard"
+	"github.com/shubhamku044/ytclipper/internal/handlers/subscription"
 	"github.com/shubhamku044/ytclipper/internal/handlers/timestamps"
 	"github.com/shubhamku044/ytclipper/internal/handlers/videos"
 	"github.com/shubhamku044/ytclipper/internal/middleware"
@@ -49,6 +50,7 @@ func SetupRouter(db *database.Database, cfg *config.Config) *gin.Engine {
 	timestampHandlers := timestamps.NewTimestampsHandlers(db, &cfg.OpenAI)
 	videoHandlers := videos.NewVideoHandlers(db)
 	dashboardHandlers := dashboard.NewDashboardHandlers(db)
+	subscriptionHandlers := subscription.NewSubscriptionHandlers(db)
 
 	r.NoRoute(func(c *gin.Context) {
 		middleware.RespondWithError(c, http.StatusNotFound, "NOT_FOUND", "The requested resource could not be found", gin.H{
@@ -102,6 +104,7 @@ func SetupRouter(db *database.Database, cfg *config.Config) *gin.Engine {
 			timestamps.SetupTimestampRoutes(protected, timestampHandlers, authMiddleware)
 			videos.SetupVideoRoutes(protected, videoHandlers, authMiddleware)
 			dashboard.SetupDashboardRoutes(protected, dashboardHandlers, authMiddleware)
+			subscription.SetupSubscriptionRoutes(protected, subscriptionHandlers, authMiddleware)
 		}
 	}
 
