@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/pgvector/pgvector-go"
 	"github.com/uptrace/bun"
 )
@@ -12,6 +13,7 @@ type TranscriptEmbedding struct {
 	bun.BaseModel `bun:"table:transcript_embeddings,alias:te"`
 
 	ID         int64           `json:"id" bun:"id,pk,autoincrement"`
+	UserID     uuid.UUID       `json:"user_id" bun:"user_id,type:uuid,notnull"`
 	VideoID    string          `json:"video_id" bun:"video_id,notnull"`
 	ChunkIndex int             `json:"chunk_index" bun:"chunk_index,notnull"`
 	StartTime  *float64        `json:"start_time" bun:"start_time"`

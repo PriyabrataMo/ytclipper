@@ -2,8 +2,8 @@
 -- +goose StatementBegin
 CREATE TABLE IF NOT EXISTS transcript_embeddings (
     id SERIAL PRIMARY KEY,
-    video_id VARCHAR(255) NOT NULL,
     user_id UUID NOT NULL,
+    video_id VARCHAR(255) NOT NULL,
     chunk_index INT NOT NULL,
     start_time FLOAT,
     end_time FLOAT,
