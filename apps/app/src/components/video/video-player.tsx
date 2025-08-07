@@ -7,6 +7,7 @@ import {
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import {
   setCurrentTimestamp,
+  setGotoTimestamp,
   setVideoTitle,
 } from '@/store/slices/timestampSlice';
 import MDEditor from '@uiw/react-md-editor';
@@ -79,6 +80,17 @@ export const VideoPlayer = ({
     console.error('Player error:', error);
     setIsPlayerReady(false);
   };
+
+  const gotoTimestamp = useAppSelector(
+    (state) => state.timestamps.gotoTimestamp,
+  );
+
+  useEffect(() => {
+    if (gotoTimestamp !== null && videoRef.current) {
+      videoRef.current.seekTo(gotoTimestamp, true);
+      dispatch(setGotoTimestamp(null)); // reset after seeking
+    }
+  }, [gotoTimestamp, videoRef, dispatch]);
 
   const handleVideoTitle = async (title: string) => {
     dispatch(setVideoTitle(title));

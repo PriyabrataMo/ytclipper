@@ -9,6 +9,7 @@ export interface TimestampState {
   lastFetch: number | null;
   currentTimestamp: number;
   videoTitle: string | null;
+  gotoTimestamp: number | null;
 }
 
 const initialState: TimestampState = {
@@ -19,6 +20,7 @@ const initialState: TimestampState = {
   lastFetch: null,
   videoTitle: null,
   currentTimestamp: 0,
+  gotoTimestamp: null,
 };
 
 const timestampSlice = createSlice({
@@ -44,10 +46,17 @@ const timestampSlice = createSlice({
     setVideoTitle: (state, action) => {
       state.videoTitle = action.payload;
     },
+    setGotoTimestamp: (state, action) => {
+      state.gotoTimestamp = action.payload;
+    },
   },
   extraReducers: () => {},
 });
 
-export const { setTimestamps, setCurrentTimestamp, setVideoTitle } =
-  timestampSlice.actions;
+export const {
+  setTimestamps,
+  setCurrentTimestamp,
+  setVideoTitle,
+  setGotoTimestamp,
+} = timestampSlice.actions;
 export default timestampSlice.reducer;

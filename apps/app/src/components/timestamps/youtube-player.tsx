@@ -92,7 +92,7 @@ export interface YouTubePlayerProps {
 }
 
 interface YouTubePlayerRef {
-  seekTo: (seconds: number) => void;
+  seekTo: (seconds: number, allowSeekAhead?: boolean) => void;
   play: () => void;
   pause: () => void;
   getCurrentTime: () => number;

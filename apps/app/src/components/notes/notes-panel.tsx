@@ -48,6 +48,8 @@ import {
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useDebounce } from '../../hooks/use-debounce';
+import { useDispatch } from 'react-redux';
+import { setGotoTimestamp } from '../../store/slices/timestampSlice';
 
 interface Timestamp {
   id: string;
@@ -90,6 +92,8 @@ export const NotesPanel = ({
   const videoTitle = timeStampsSliceData.videoTitle;
   const [tagInput, setTagInput] = useState('');
   const [showTagSuggestions, setShowTagSuggestions] = useState(false);
+
+  const dispatch = useDispatch();
 
   const {
     data: timestampsData,
@@ -680,6 +684,39 @@ export const NotesPanel = ({
                           </div>
                         </div>
                         <div className='flex items-center gap-1 flex-shrink-0 justify-center'>
+                          <Button
+                            variant='ghost'
+                            size='sm'
+                            className='h-8 min-w-8 w-full p-0 hover:bg-gray-200'
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              dispatch(setGotoTimestamp(note.timestamp));
+                            }}
+                            disabled={isUpdating}
+                          >
+                            {isUpdating ? (
+                              <Loader2 className='h-4 w-4 animate-spin' />
+                            ) : (
+                              <>
+                                <svg
+                                  xmlns='http://www.w3.org/2000/svg'
+                                  width='24'
+                                  height='24'
+                                  viewBox='0 0 24 24'
+                                  fill='none'
+                                  stroke='currentColor'
+                                  strokeWidth='2'
+                                  strokeLinecap='round'
+                                  strokeLinejoin='round'
+                                >
+                                  <path d='M21 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6' />
+                                  <path d='m21 3-9 9' />
+                                  <path d='M15 3h6v6' />
+                                </svg>
+                                <div className='md:hidden'>Goto</div>
+                              </>
+                            )}
+                          </Button>
                           <Button
                             variant='ghost'
                             size='sm'
