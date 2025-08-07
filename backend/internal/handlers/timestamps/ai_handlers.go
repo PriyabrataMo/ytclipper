@@ -195,105 +195,32 @@ func (t *TimestampsHandlers) GenerateFullVideoSummary(c *gin.Context) {
 		}
 	}
 
-	var currentVideo models.Video
-	var transcriptEmbedding []float32
+	// if len(video.TranscriptEmbedding) == 0 {
+	// 	t.ProcessEmbeddingInBackground(userIDStr, req.VideoID)
+	// }
 
-	err = t.db.DB.NewSelect().
-		Model(&currentVideo).
-		Where("user_id = ? AND video_id = ? AND deleted_at IS NULL", userID, req.VideoID).
-		Scan(context.Background())
-
+	if !req.Refresh && video.AISummary != "" && video.AISummaryGeneratedAt != nil {
+		middleware.RespondWithOK(c, gin.H{
+			"summary":      video.AISummary,
+			"video_id":     req.VideoID,
+			"video_title":  video.Title,
+			"generated_at": video.AISummaryGeneratedAt,
+			"cached":       true,
+		})
+		return
+	}
+	transcript, err := t.generateYouTubeTranscript(req.VideoID)
+	fmt.Printf("Transcript for video %s: %s\n", req.VideoID, transcript)
 	if err != nil {
-		middleware.RespondWithError(c, http.StatusInternalServerError, "DB_ERROR", "Failed to fetch video", gin.H{
+		middleware.RespondWithError(c, http.StatusInternalServerError, "TRANSCRIPT_ERROR", "Failed to generate transcript", gin.H{
 			"error": err.Error(),
 		})
 		return
 	}
 
-	// Check if this user already has transcript embedding
-	if len(currentVideo.TranscriptEmbedding) > 0 {
-		transcriptEmbedding = currentVideo.TranscriptEmbedding
-	} else {
-		var otherVideo models.Video
-		err = t.db.DB.NewSelect().
-			Model(&otherVideo).
-			Where("video_id = ? AND transcript_embedding IS NOT NULL AND deleted_at IS NULL AND user_id != ?", req.VideoID, userID).
-			Limit(1).
-			Scan(context.Background())
+	return
 
-		if err == nil && len(otherVideo.TranscriptEmbedding) > 0 {
-			_, err = t.db.DB.NewUpdate().
-				Model(&currentVideo).
-				Set("transcript_embedding = ?", otherVideo.TranscriptEmbedding).
-				Where("user_id = ? AND video_id = ?", userID, req.VideoID).
-				Exec(context.Background())
-
-			if err != nil {
-				middleware.RespondWithError(c, http.StatusInternalServerError, "DB_ERROR", "Failed to copy transcript embedding", gin.H{
-					"error": err.Error(),
-				})
-				return
-			}
-			transcriptEmbedding = otherVideo.TranscriptEmbedding
-		} else {
-			transcript, err := t.generateYouTubeTranscript(req.VideoID)
-			if err != nil {
-				placeholderText := fmt.Sprintf("Video: %s. No transcript available.", video.Title)
-				transcriptEmbedding, err = t.aiService.GenerateEmbedding(placeholderText)
-				if err != nil {
-					middleware.RespondWithError(c, http.StatusInternalServerError, "EMBEDDING_ERROR", "Failed to generate placeholder embedding", gin.H{
-						"error": err.Error(),
-					})
-					return
-				}
-			} else {
-				transcriptEmbedding, err = t.aiService.GenerateEmbedding(transcript)
-				if err != nil {
-					middleware.RespondWithError(c, http.StatusInternalServerError, "EMBEDDING_ERROR", "Failed to generate transcript embedding", gin.H{
-						"error": err.Error(),
-					})
-					return
-				}
-			}
-
-			_, err = t.db.DB.NewUpdate().
-				Model(&currentVideo).
-				Set("transcript_embedding = ?", transcriptEmbedding).
-				Where("user_id = ? AND video_id = ?", userID, req.VideoID).
-				Exec(context.Background())
-
-			if err != nil {
-				middleware.RespondWithError(c, http.StatusInternalServerError, "DB_ERROR", "Failed to save transcript embedding", gin.H{
-					"error": err.Error(),
-				})
-				return
-			}
-		}
-	}
-
-	var timestamps []models.Timestamp
-	err = t.db.DB.NewSelect().
-		Model(&timestamps).
-		Where("user_id = ? AND video_id = ? AND deleted_at IS NULL", userID, req.VideoID).
-		Order("timestamp ASC").
-		Scan(context.Background())
-	if err != nil {
-		timestamps = []models.Timestamp{}
-	}
-
-	if !req.Refresh && currentVideo.AISummary != "" && currentVideo.AISummaryGeneratedAt != nil {
-		middleware.RespondWithOK(c, gin.H{
-			"summary":      currentVideo.AISummary,
-			"video_id":     req.VideoID,
-			"video_title":  currentVideo.Title,
-			"note_count":   len(timestamps),
-			"generated_at": currentVideo.AISummaryGeneratedAt,
-			"cached":       true,
-		})
-		return
-	}
-
-	summary, err := t.generateFullVideoSummaryWithEmbedding(&currentVideo, timestamps)
+	summary, err := t.generateFullVideoSummary(&video, transcript)
 	if err != nil {
 		middleware.RespondWithError(c, http.StatusInternalServerError, "AI_ERROR", "Failed to generate full video summary", gin.H{
 			"error": err.Error(),
@@ -301,15 +228,29 @@ func (t *TimestampsHandlers) GenerateFullVideoSummary(c *gin.Context) {
 		return
 	}
 
-	// Check if streaming is requested
 	stream := c.Query("stream") == "true"
 
 	if stream {
-		// Set headers for streaming
 		c.Header("Content-Type", "text/event-stream")
 		c.Header("Cache-Control", "no-cache")
 		c.Header("Connection", "keep-alive")
-		c.Header("Access-Control-Allow-Origin", "http://localhost:5173")
+
+		allowedOrigins := []string{
+			"http://localhost:5173",             // Local development
+			"http://localhost:3000",             // Alternative local port
+			"https://ytclipper.com",             // Production domain
+			"https://app.ytclipper.com",         // Production with www
+			"https://app-staging.ytclipper.com", // Staging environment
+		}
+
+		origin := c.GetHeader("Origin")
+		for _, allowedOrigin := range allowedOrigins {
+			if origin == allowedOrigin {
+				c.Header("Access-Control-Allow-Origin", origin)
+				break
+			}
+		}
+
 		c.Header("Access-Control-Allow-Headers", "Cache-Control")
 		c.Header("Access-Control-Allow-Credentials", "true")
 
@@ -343,8 +284,7 @@ func (t *TimestampsHandlers) GenerateFullVideoSummary(c *gin.Context) {
 		completeData := gin.H{
 			"summary":      summary,
 			"video_id":     req.VideoID,
-			"video_title":  currentVideo.Title,
-			"note_count":   len(timestamps),
+			"video_title":  video.Title,
 			"generated_at": time.Now().UTC(),
 			"cached":       false,
 		}
@@ -361,7 +301,7 @@ func (t *TimestampsHandlers) GenerateFullVideoSummary(c *gin.Context) {
 		// Save summary to database even when streaming
 		now := time.Now().UTC()
 		_, err = t.db.DB.NewUpdate().
-			Model(&currentVideo).
+			Model(&video).
 			Set("ai_summary = ?", summary).
 			Set("ai_summary_generated_at = ?", now).
 			Where("user_id = ? AND video_id = ?", userID, req.VideoID).
@@ -374,7 +314,7 @@ func (t *TimestampsHandlers) GenerateFullVideoSummary(c *gin.Context) {
 		// Regular response
 		now := time.Now().UTC()
 		_, err = t.db.DB.NewUpdate().
-			Model(&currentVideo).
+			Model(&video).
 			Set("ai_summary = ?", summary).
 			Set("ai_summary_generated_at = ?", now).
 			Where("user_id = ? AND video_id = ?", userID, req.VideoID).
@@ -387,8 +327,7 @@ func (t *TimestampsHandlers) GenerateFullVideoSummary(c *gin.Context) {
 		middleware.RespondWithOK(c, gin.H{
 			"summary":      summary,
 			"video_id":     req.VideoID,
-			"video_title":  currentVideo.Title,
-			"note_count":   len(timestamps),
+			"video_title":  video.Title,
 			"generated_at": now,
 			"cached":       false,
 		})
@@ -396,7 +335,6 @@ func (t *TimestampsHandlers) GenerateFullVideoSummary(c *gin.Context) {
 }
 
 func (t *TimestampsHandlers) TestStreaming(c *gin.Context) {
-	// Set headers for streaming
 	c.Header("Content-Type", "text/event-stream")
 	c.Header("Cache-Control", "no-cache")
 	c.Header("Connection", "keep-alive")
@@ -404,10 +342,8 @@ func (t *TimestampsHandlers) TestStreaming(c *gin.Context) {
 	c.Header("Access-Control-Allow-Headers", "Cache-Control")
 	c.Header("Access-Control-Allow-Credentials", "true")
 
-	// Flush headers immediately
 	c.Writer.Flush()
 
-	// Test words
 	testWords := []string{"Hello", "world", "this", "is", "a", "test", "of", "streaming"}
 
 	for i, word := range testWords {
@@ -417,21 +353,18 @@ func (t *TimestampsHandlers) TestStreaming(c *gin.Context) {
 			"total": len(testWords),
 		}
 
-		// Convert to JSON
 		jsonData, err := json.Marshal(chunkData)
 		if err != nil {
 			log.Printf("Failed to marshal test chunk data: %v", err)
 			continue
 		}
 
-		// Send SSE event in proper format
 		eventData := fmt.Sprintf("event: chunk\ndata: %s\n\n", string(jsonData))
 		c.Writer.WriteString(eventData)
 		c.Writer.Flush()
 		time.Sleep(100 * time.Millisecond)
 	}
 
-	// Send completion event
 	completeData := gin.H{
 		"summary":      "Test streaming completed successfully",
 		"video_id":     "test",
@@ -501,17 +434,17 @@ func (t *TimestampsHandlers) AnswerQuestion(c *gin.Context) {
 			Where("user_id = ? AND video_id = ? AND deleted_at IS NULL", userID, req.VideoID).
 			Scan(context.Background())
 
-		if err == nil && len(video.TranscriptEmbedding) > 0 {
-			// Calculate similarity with transcript embedding
-			transcriptSimilarity := CosineSimilarity(queryEmbedding, video.TranscriptEmbedding)
+		// if err == nil && len(video.TranscriptEmbedding) > 0 {
+		// 	// Calculate similarity with transcript embedding
+		// 	transcriptSimilarity := CosineSimilarity(queryEmbedding, video.TranscriptEmbedding)
 
-			// If transcript is highly relevant, include it in context
-			if transcriptSimilarity > 0.3 { // Threshold for relevance
-				contextBuilder.WriteString("## Video Transcript Context\n\n")
-				contextBuilder.WriteString("The question is highly relevant to the video transcript content. ")
-				contextBuilder.WriteString("The AI will use the full video transcript to provide a comprehensive answer.\n\n")
-			}
-		}
+		// 	// If transcript is highly relevant, include it in context
+		// 	if transcriptSimilarity > 0.3 { // Threshold for relevance
+		// 		contextBuilder.WriteString("## Video Transcript Context\n\n")
+		// 		contextBuilder.WriteString("The question is highly relevant to the video transcript content. ")
+		// 		contextBuilder.WriteString("The AI will use the full video transcript to provide a comprehensive answer.\n\n")
+		// 	}
+		// }
 
 		// Get relevant user notes for this video
 		searchReq := SearchRequest{
@@ -699,32 +632,61 @@ Make your answer helpful, accurate, and well-structured.`,
 	})
 }
 
-// generateYouTubeTranscript generates transcript for a YouTube video
+func formatTimestamp(duration int) string {
+	hours := duration / 3600
+	minutes := (duration % 3600) / 60
+	seconds := duration % 60
+
+	return fmt.Sprintf("[%02d:%02d:%02d]", hours, minutes, seconds)
+}
+
 func (t *TimestampsHandlers) generateYouTubeTranscript(videoID string) (string, error) {
 	client := youtube.Client{}
 
-	// Try to get video info first
+	// First, try to get video info
 	video, err := client.GetVideo(videoID)
 	if err != nil {
-		return "", fmt.Errorf("failed to get video info: %w", err)
+		if strings.Contains(err.Error(), "400") {
+			return "", fmt.Errorf("video not accessible (400 error) - possible reasons: private video, region-restricted, or transcript disabled for video %s", videoID)
+		}
+		return "", fmt.Errorf("failed to get video info for video %s: %w", videoID, err)
 	}
 
-	// Try to get transcript
-	transcript, err := client.GetTranscript(video)
-	if err != nil {
-		return "", fmt.Errorf("failed to get transcript: %w", err)
+	if len(video.CaptionTracks) == 0 {
+		return "", fmt.Errorf("no captions available for video %s", videoID)
+	}
+
+	fmt.Printf("Found %d caption tracks for video %s\n", len(video.CaptionTracks), videoID)
+
+	var transcript youtube.VideoTranscript
+	var transcriptErr error
+	for _, captionTrack := range video.CaptionTracks {
+		transcript, transcriptErr = client.GetTranscript(video, captionTrack.LanguageCode)
+		if transcriptErr == nil {
+			break
+		}
+	}
+
+	if transcriptErr != nil {
+		return "", fmt.Errorf("failed to get transcript for video %s: %w", videoID, transcriptErr)
 	}
 
 	var transcriptText strings.Builder
-	for _, line := range transcript {
-		transcriptText.WriteString(line.Text)
-		transcriptText.WriteString(" ")
+	transcriptText.WriteString("TRANSCRIPT WITH TIMESTAMPS:\n\n")
+	for _, entry := range transcript {
+		timestamp := formatTimestamp(entry.Duration)
+		transcriptText.WriteString(fmt.Sprintf("%s %s\n", timestamp, entry.Text))
 	}
 
-	return transcriptText.String(), nil
+	result := strings.TrimSpace(transcriptText.String())
+	if result == "" {
+		return "", fmt.Errorf("transcript is empty for video %s", videoID)
+	}
+
+	return result, nil
 }
 
-func (t *TimestampsHandlers) generateFullVideoSummaryWithEmbedding(video *models.Video, timestamps []models.Timestamp) (string, error) {
+func (t *TimestampsHandlers) generateFullVideoSummary(video *models.Video, transcript string) (string, error) {
 	var content strings.Builder
 	content.WriteString(fmt.Sprintf("# Full Video Summary: %s\n\n", video.Title))
 
@@ -732,32 +694,8 @@ func (t *TimestampsHandlers) generateFullVideoSummaryWithEmbedding(video *models
 		content.WriteString(fmt.Sprintf("## Video Description\n%s\n\n", video.Description))
 	}
 
-	// Add user timestamps if available
-	if len(timestamps) > 0 {
-		content.WriteString("## User Notes and Timestamps\n\n")
-		for _, ts := range timestamps {
-			content.WriteString(fmt.Sprintf("### Timestamp: %.2f seconds\n", ts.Timestamp))
-			if ts.Title != "" {
-				content.WriteString(fmt.Sprintf("**Title:** %s\n\n", ts.Title))
-			}
-			if ts.Note != "" {
-				content.WriteString(fmt.Sprintf("**Note:** %s\n\n", ts.Note))
-			}
-			if len(ts.Tags) > 0 {
-				var tagNames []string
-				for _, tag := range ts.Tags {
-					tagNames = append(tagNames, tag.Name)
-				}
-				content.WriteString(fmt.Sprintf("**Tags:** %s\n\n", strings.Join(tagNames, ", ")))
-			}
-			content.WriteString("---\n\n")
-		}
-	}
-
-	// Add transcript embedding information
-	if len(video.TranscriptEmbedding) > 0 {
-		content.WriteString("## Transcript Analysis\n\n")
-		content.WriteString("This video has been analyzed using AI transcript embedding for comprehensive understanding.\n\n")
+	if transcript != "" {
+		content.WriteString(fmt.Sprintf("## Video Transcript\n%s\n\n", transcript))
 	}
 
 	prompt := `Act as an expert content analyst. Create a comprehensive, well-organized summary of this YouTube video using the provided information and transcript analysis.
@@ -818,4 +756,124 @@ Now analyze this content and identify the most important moments for timestamps:
 ` + content.String()
 
 	return t.aiService.GenerateTextCompletion(prompt)
+}
+
+func (t *TimestampsHandlers) ProcessEmbeddingInBackground(userID, videoID string) {
+	go func() {
+		err := t.generateOrCopyTranscriptEmbedding(userID, videoID)
+		if err != nil {
+			log.Printf("Failed to process embedding for user %s, video %s: %v", userID, videoID, err)
+		}
+	}()
+}
+
+func (t *TimestampsHandlers) generateOrCopyTranscriptEmbedding(userIDStr, videoID string) error {
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		return fmt.Errorf("invalid user ID: %w", err)
+	}
+
+	var currentVideo models.Video
+	err = t.db.DB.NewSelect().
+		Model(&currentVideo).
+		Where("user_id = ? AND video_id = ? AND deleted_at IS NULL", userID, videoID).
+		Scan(context.Background())
+
+	if err != nil {
+		placeholderTitle := "Video " + videoID
+		placeholderURL := "https://youtube.com/watch?v=" + videoID
+
+		currentVideo = models.Video{
+			UserID:     userID,
+			VideoID:    videoID,
+			YouTubeURL: placeholderURL,
+			Title:      placeholderTitle,
+		}
+
+		_, err = t.db.DB.NewInsert().
+			Model(&currentVideo).
+			Exec(context.Background())
+		if err != nil {
+			return fmt.Errorf("failed to create video record: %w", err)
+		}
+	}
+
+	// Step 1: Try to copy from another user who has the same video
+	var otherVideo models.Video
+	err = t.db.DB.NewSelect().
+		Model(&otherVideo).
+		Where("video_id = ? AND transcript_embedding IS NOT NULL AND deleted_at IS NULL AND user_id != ?", videoID, userID).
+		Limit(1).
+		Scan(context.Background())
+
+	// Step 2: Generate new embedding if copy failed or no existing embedding found
+	log.Printf("Generating new transcript embedding for user %s, video %s", userIDStr, videoID)
+
+	transcript, err := t.generateYouTubeTranscript(videoID)
+	if err != nil {
+		// If transcript fails, create a placeholder embedding
+		placeholderText := fmt.Sprintf("Video: %s. No transcript available.", currentVideo.Title)
+		embedding, embedErr := t.aiService.GenerateEmbedding(placeholderText)
+		if embedErr != nil {
+			return fmt.Errorf("failed to generate placeholder embedding: %w", embedErr)
+		}
+
+		_, err = t.db.DB.NewUpdate().
+			Model(&currentVideo).
+			Set("transcript_embedding = ?", embedding).
+			Set("updated_at = ?", time.Now().UTC()).
+			Where("user_id = ? AND video_id = ?", userID, videoID).
+			Exec(context.Background())
+
+		if err != nil {
+			return fmt.Errorf("failed to save placeholder embedding: %w", err)
+		}
+
+		log.Printf("Saved placeholder embedding for user %s, video %s (no transcript available)", userIDStr, videoID)
+		return nil
+	}
+
+	// Generate embedding from transcript
+	embedding, err := t.aiService.GenerateEmbedding(TruncateText(transcript, 4000))
+	if err != nil {
+		return fmt.Errorf("failed to generate transcript embedding: %w", err)
+	}
+
+	// Save the embedding
+	_, err = t.db.DB.NewUpdate().
+		Model(&currentVideo).
+		Set("transcript_embedding = ?", embedding).
+		Set("updated_at = ?", time.Now().UTC()).
+		Where("user_id = ? AND video_id = ?", userID, videoID).
+		Exec(context.Background())
+
+	if err != nil {
+		return fmt.Errorf("failed to save transcript embedding: %w", err)
+	}
+
+	log.Printf("Successfully generated and saved transcript embedding for user %s, video %s", userIDStr, videoID)
+	return nil
+}
+
+func CountTokens(text string) int {
+	// Rough estimation: 1 token ≈ 4 characters for English text
+	return len(text) / 4
+}
+
+// TruncateText truncates text to fit within token limits
+func TruncateText(text string, maxTokens int) string {
+	estimatedTokens := CountTokens(text)
+	if estimatedTokens <= maxTokens {
+		return text
+	}
+
+	// Calculate approximate character limit
+	maxChars := maxTokens * 4
+	if len(text) <= maxChars {
+		return text
+	}
+
+	// Truncate and add indicator
+	truncated := text[:maxChars-50] // Leave some buffer
+	return truncated + "\n\n[TRANSCRIPT TRUNCATED DUE TO LENGTH]"
 }
