@@ -157,6 +157,10 @@
 }
 
 @layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
   * {
     @apply border-border outline-ring/50;
   }
@@ -164,6 +168,17 @@
     @apply bg-background text-foreground;
   }
 }
+
+@layer components {
+  .btn-primary {
+    @apply bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white px-5 py-3 rounded-md font-medium text-xl lg:text-base  transition-all duration-200 transform hover:scale-[1.02] shadow-lg;
+  }
+  .btn-outline {
+    @apply bg-transparent border border-orange-500 text-orange-500 hover:bg-orange-500 hover:text-white px-5 py-3 rounded-md font-medium text-xl lg:text-base  transition-all duration-200 transform hover:scale-[1.02] shadow-lg;
+  }
+}
+
+// font for homepage - using Tailwind font-poppins class instead
 
 /* Scrollbar Styles */
 .scrollbar-thin {
