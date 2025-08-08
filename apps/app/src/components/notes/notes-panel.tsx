@@ -355,7 +355,7 @@ export const NotesPanel = ({
   };
 
   return (
-    <div className='h-full bg-white border border-secondary flex flex-col min-w-0 rounded-xl pb-4'>
+    <div className='h-full bg-white border flex flex-col min-w-0 rounded-xl pb-4'>
       {/* Header */}
       <div className='p-4 border-b border-primary bg-white flex-shrink-0 rounded-t-xl'>
         <div className='flex items-center justify-between'>
@@ -638,7 +638,7 @@ export const NotesPanel = ({
       ) : null}
 
       <div className='flex-1 min-h-0'>
-        <div className='flex-1 h-fit max-h-[90vh] relative px-4 pb-4 justify-center w-full overflow-y-auto'>
+        <div className='flex-1 h-fit max-h-[80vh] relative px-4 pb-4 justify-center w-full overflow-y-auto'>
           {timestampsLoading ? (
             <div className='text-center py-8'>
               <div className='inline-flex items-center justify-center w-12 h-12 bg-gray-100 rounded-full mb-4'>

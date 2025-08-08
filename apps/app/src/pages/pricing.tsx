@@ -152,7 +152,7 @@ export const PricingPage = () => {
           </p>
         </div>
 
-        <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-16'>
+        <div className='grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-16'>
           {plans.map((plan) => (
             <Card
               key={plan.name}
@@ -243,7 +243,7 @@ export const PricingPage = () => {
             Frequently Asked Questions
           </h2>
 
-          <div className='grid grid-cols-1 md:grid-cols-2 gap-8'>
+          <div className='grid grid-cols-1 md:grid-cols-2 gap-8 align-middle'>
             <div className='space-y-6'>
               <div>
                 <h3 className='text-lg font-semibold text-gray-900 mb-2'>
