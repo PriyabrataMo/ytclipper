@@ -1,11 +1,11 @@
-import Nav from '../components/landing/Nav';
-import Hero from '../components/landing/Hero';
-import Features from '../components/landing/Features';
-import Pricing from '../components/landing/Pricing';
-import Faq from '../components/landing/Faq';
 import Contact from '../components/landing/Contact';
+import Faq from '../components/landing/Faq';
+import Features from '../components/landing/Features';
 import Footer from '../components/landing/Footer';
+import Hero from '../components/landing/Hero';
 import Maker from '../components/landing/Maker';
+import Nav from '../components/landing/Nav';
+import Pricing from '../components/landing/Pricing';
 
 export const HomePage = () => {
   return (

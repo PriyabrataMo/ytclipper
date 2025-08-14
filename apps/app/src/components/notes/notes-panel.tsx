@@ -48,8 +48,8 @@ import {
   X,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { useDebounce } from '../../hooks/use-debounce';
 import { useDispatch } from 'react-redux';
+import { useDebounce } from '../../hooks/use-debounce';
 import { setGotoTimestamp } from '../../store/slices/timestampSlice';
 
 interface Timestamp {

@@ -194,7 +194,22 @@ func (v *VideoHandlers) DeleteVideo(c *gin.Context) {
 
 	ctx := context.Background()
 
-	_, err = v.db.DB.NewUpdate().
+	tx, err := v.db.DB.BeginTx(ctx, nil)
+	if err != nil {
+		middleware.RespondWithError(c, http.StatusInternalServerError, "DB_TRANSACTION_ERROR", "Failed to start transaction", gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+	commited := false
+
+	defer func() {
+		if !commited {
+			_ = tx.Rollback()
+		}
+	}()
+
+	_, err = tx.NewUpdate().
 		Model((*models.Video)(nil)).
 		Set("deleted_at = NOW()").
 		Where("user_id = ? AND video_id = ? AND deleted_at IS NULL", userID, videoID).
@@ -207,7 +222,7 @@ func (v *VideoHandlers) DeleteVideo(c *gin.Context) {
 		return
 	}
 
-	_, err = v.db.DB.NewUpdate().
+	_, err = tx.NewUpdate().
 		Model((*models.Timestamp)(nil)).
 		Set("deleted_at = NOW()").
 		Where("user_id = ? AND video_id = ? AND deleted_at IS NULL", userID, videoID).
@@ -220,8 +235,114 @@ func (v *VideoHandlers) DeleteVideo(c *gin.Context) {
 		return
 	}
 
+	_, err = tx.NewUpdate().
+		Model((*models.TranscriptEmbedding)(nil)).
+		Set("deleted_at = NOW()").
+		Where("user_id = ? AND video_id = ? AND deleted_at IS NULL", userID, videoID).
+		Exec(ctx)
+
+	if err != nil {
+		middleware.RespondWithError(c, http.StatusInternalServerError, "DB_ERROR", "Failed to delete video transcript embeddings", gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		middleware.RespondWithError(c, http.StatusInternalServerError, "DB_COMMIT_ERROR", "Failed to commit transaction", gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+	commited = true
+
 	middleware.RespondWithOK(c, gin.H{
 		"message": "Video and all associated timestamps deleted successfully",
+	})
+}
+func (v *VideoHandlers) HardDeleteVideo(c *gin.Context) {
+	userIDStr, exists := authhandlers.GetUserID(c)
+	if !exists {
+		middleware.RespondWithError(c, http.StatusUnauthorized, "NO_USER_ID", "User ID not found", nil)
+		return
+	}
+
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		middleware.RespondWithError(c, http.StatusBadRequest, "INVALID_USER_ID", "Invalid user ID format", gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	videoID := c.Param("id")
+	if videoID == "" {
+		middleware.RespondWithError(c, http.StatusBadRequest, "MISSING_VIDEO_ID", "Video ID is required", nil)
+		return
+	}
+
+	ctx := context.Background()
+	tx, err := v.db.DB.BeginTx(ctx, nil)
+	if err != nil {
+		middleware.RespondWithError(c, http.StatusInternalServerError, "DB_TRANSACTION_ERROR", "Failed to start transaction", gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+	commited := false
+	defer func() {
+		if !commited {
+			_ = tx.Rollback()
+		}
+	}()
+
+	// Only hard delete if soft deleted (deleted_at IS NOT NULL)
+	_, err = tx.NewDelete().
+		Model((*models.Video)(nil)).
+		Where("user_id = ? AND video_id = ?", userID, videoID).
+		ForceDelete().
+		Exec(ctx)
+	if err != nil {
+		middleware.RespondWithError(c, http.StatusInternalServerError, "DB_ERROR", "Failed to hard delete video", gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	_, err = tx.NewDelete().
+		Model((*models.Timestamp)(nil)).
+		Where("user_id = ? AND video_id = ?", userID, videoID).
+		ForceDelete().
+		Exec(ctx)
+	if err != nil {
+		middleware.RespondWithError(c, http.StatusInternalServerError, "DB_ERROR", "Failed to hard delete timestamps", gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	_, err = tx.NewDelete().
+		Model((*models.TranscriptEmbedding)(nil)).
+		Where("user_id = ? AND video_id = ?", userID, videoID).
+		ForceDelete().
+		Exec(ctx)
+	if err != nil {
+		middleware.RespondWithError(c, http.StatusInternalServerError, "DB_ERROR", "Failed to hard delete transcript embeddings", gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		middleware.RespondWithError(c, http.StatusInternalServerError, "DB_COMMIT_ERROR", "Failed to commit transaction", gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+	commited = true
+
+	middleware.RespondWithOK(c, gin.H{
+		"message": "Video and all associated data permanently deleted",
 	})
 }
 
@@ -337,7 +458,7 @@ func (v *VideoHandlers) CreateVideoIfNotExists(ctx context.Context, userID uuid.
 			return err
 		}
 		if !canAdd {
-			return fmt.Errorf("video limit exceeded for your current plan")
+			return fmt.Errorf("USAGE_LIMIT_EXCEEDED")
 		}
 
 		video := &models.Video{

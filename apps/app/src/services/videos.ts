@@ -66,6 +66,24 @@ export const injectedVideosApi = api.injectEndpoints({
         }
       },
     }),
+    softDeleteVideo: builder.mutation<
+      UniversalResponse<{ message: string }>,
+      { videoId: string }
+    >({
+      query: ({ videoId }) => ({
+        url: `/ytclipper/videos/${videoId}`,
+        method: 'DELETE',
+      }),
+    }),
+    hardDeleteVideo: builder.mutation<
+      UniversalResponse<{ message: string }>,
+      { videoId: string }
+    >({
+      query: ({ videoId }) => ({
+        url: `/ytclipper/videos/${videoId}/hard`,
+        method: 'DELETE',
+      }),
+    }),
     updateVideoMetadata: builder.mutation<
       UniversalResponse<{ message: string }>,
       UpdateVideoMetadataRequest
@@ -110,4 +128,6 @@ export const {
   useGetUserVideosQuery,
   useUpdateVideoMetadataMutation,
   useUpdateWatchedDurationMutation,
+  useSoftDeleteVideoMutation,
+  useHardDeleteVideoMutation,
 } = injectedVideosApi;

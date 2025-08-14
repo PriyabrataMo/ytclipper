@@ -94,48 +94,6 @@ func (s *FeatureUsageService) GetUsage(ctx context.Context, userID uuid.UUID, fe
 }
 
 func (s *FeatureUsageService) CheckUsageLimit(ctx context.Context, userID uuid.UUID, featureName string, videoID ...string) (bool, error) {
-	// For notes_per_video, we need to check per video
-	if featureName == "notes_per_video" && len(videoID) > 0 {
-		videoSpecificFeature := fmt.Sprintf("notes_per_video_%s", videoID[0])
-		usage, err := s.GetUsage(ctx, userID, videoSpecificFeature)
-		if err != nil {
-			// If no usage record exists, check if we can create one
-			if err.Error() == "failed to get usage: sql: no rows in result set" {
-				// Get user's current subscription to determine limits
-				var subscription models.Subscription
-				err = s.db.DB.NewSelect().
-					Model(&subscription).
-					Where("user_id = ? AND status = 'active'", userID).
-					Scan(ctx)
-
-				if err != nil {
-					subscription.PlanType = "free"
-				}
-
-				planLimits := getPlanLimits(subscription.PlanType)
-				limit, exists := planLimits[featureName]
-				if !exists {
-					limit = 0
-				}
-
-				if limit <= 0 {
-					return true, nil
-				}
-
-				return 0 < limit, nil
-			}
-			return false, err
-		}
-
-		// If usage limit is 0 or negative, it means unlimited
-		if usage.UsageLimit <= 0 {
-			return true, nil
-		}
-
-		return usage.CurrentUsage < usage.UsageLimit, nil
-	}
-
-	// For other features, use the original logic
 	usage, err := s.GetUsage(ctx, userID, featureName)
 	if err != nil {
 		// If no usage record exists, check if we can create one
@@ -191,10 +149,10 @@ func getPlanLimits(planType string) map[string]int {
 	switch planType {
 	case "free":
 		return map[string]int{
-			"videos":          5,
-			"notes_per_video": 8,
-			"ai_summaries":    3,
-			"ai_questions":    10,
+			"videos":       5,
+			"notes":        40,
+			"ai_summaries": 3,
+			"ai_questions": 10,
 		}
 	case "monthly":
 		return map[string]int{
