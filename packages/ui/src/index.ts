@@ -20,6 +20,7 @@ export * from './components/input-otp';
 export * from './components/progress';
 export * from './components/resizable';
 export * from './components/scroll-area';
+export * from './components/select';
 export * from './components/skeleton';
 export * from './components/sonner';
 export * from './components/tabs';

@@ -1,9 +1,5 @@
 import { store } from '@/store';
-import {
-  selectVideoHasMetadata,
-  setVideos,
-  updateVideoMetadata,
-} from '@/store/slices/videoSlice';
+import { selectVideoHasMetadata, setVideos } from '@/store/slices/videoSlice';
 import type { UniversalResponse } from '@/types';
 import { api } from './api';
 
@@ -24,6 +20,7 @@ export interface VideoSummary {
   count: number;
   latest_timestamp?: string;
   created_at: string;
+  deleted_at?: string;
 }
 
 export interface GetUserVideosResponse {
@@ -43,6 +40,15 @@ export interface UpdateWatchedDurationRequest {
   watched_duration: number;
 }
 
+export interface VideoFilters {
+  search?: string;
+  status?: 'all' | 'active' | 'deleted';
+  sortBy?: 'created_at' | 'title' | 'duration' | 'count' | 'watched_duration';
+  sortOrder?: 'asc' | 'desc';
+  durationRange?: 'all' | 'short' | 'medium' | 'long';
+  progressRange?: 'all' | 'not_started' | 'in_progress' | 'completed';
+}
+
 export const needsMetadataUpdate = (videoId: string): boolean => {
   const state = store.getState();
   return !selectVideoHasMetadata(state, videoId);
@@ -52,9 +58,38 @@ export const injectedVideosApi = api.injectEndpoints({
   endpoints: (builder) => ({
     getUserVideos: builder.query<
       UniversalResponse<GetUserVideosResponse>,
-      void
+      VideoFilters | void
     >({
-      query: () => '/ytclipper/videos',
+      query: (filters) => {
+        if (!filters) {
+          return '/ytclipper/videos';
+        }
+
+        const params = new URLSearchParams();
+        if (filters.search) {
+          params.append('search', filters.search);
+        }
+        if (filters.status && filters.status !== 'all') {
+          params.append('status', filters.status);
+        }
+        if (filters.sortBy && filters.sortBy !== 'created_at') {
+          params.append('sortBy', filters.sortBy);
+        }
+        if (filters.sortOrder && filters.sortOrder !== 'desc') {
+          params.append('sortOrder', filters.sortOrder);
+        }
+        if (filters.durationRange && filters.durationRange !== 'all') {
+          params.append('durationRange', filters.durationRange);
+        }
+        if (filters.progressRange && filters.progressRange !== 'all') {
+          params.append('progressRange', filters.progressRange);
+        }
+
+        const queryString = params.toString();
+        return queryString
+          ? `/ytclipper/videos?${queryString}`
+          : '/ytclipper/videos';
+      },
       async onQueryStarted(_, { dispatch, queryFulfilled }) {
         try {
           const { data } = await queryFulfilled;
@@ -84,35 +119,27 @@ export const injectedVideosApi = api.injectEndpoints({
         method: 'DELETE',
       }),
     }),
+    restoreVideo: builder.mutation<
+      UniversalResponse<{ message: string }>,
+      { videoId: string }
+    >({
+      query: ({ videoId }) => ({
+        url: `/ytclipper/videos/${videoId}/restore`,
+        method: 'PUT',
+      }),
+    }),
     updateVideoMetadata: builder.mutation<
       UniversalResponse<{ message: string }>,
       UpdateVideoMetadataRequest
     >({
-      query: (body) => ({
+      query: (data) => ({
         url: '/ytclipper/videos/metadata',
         method: 'PUT',
-        body,
+        body: data,
       }),
-      async onQueryStarted(
-        { video_id, title, youtube_url },
-        { dispatch, queryFulfilled },
-      ) {
-        try {
-          await queryFulfilled;
-          dispatch(
-            updateVideoMetadata({
-              videoId: video_id,
-              title,
-              youtubeUrl: youtube_url,
-            }),
-          );
-        } catch (error) {
-          console.error('Failed to update video metadata:', error);
-        }
-      },
     }),
     updateWatchedDuration: builder.mutation<
-      UniversalResponse<{ message: string; watched_duration: number }>,
+      UniversalResponse<{ message: string }>,
       { videoId: string; data: UpdateWatchedDurationRequest }
     >({
       query: ({ videoId, data }) => ({
@@ -130,4 +157,5 @@ export const {
   useUpdateWatchedDurationMutation,
   useSoftDeleteVideoMutation,
   useHardDeleteVideoMutation,
+  useRestoreVideoMutation,
 } = injectedVideosApi;
