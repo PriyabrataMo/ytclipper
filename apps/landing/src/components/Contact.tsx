@@ -1,4 +1,4 @@
-import { Mail, MessageSquare, Send, User } from 'lucide-react';
+import { MessageSquare, Mail, User, Send } from 'lucide-react';
 import React, { useState } from 'react';
 
 const Contact = () => {
