@@ -19,7 +19,7 @@ import {
 } from '@ytclipper/ui';
 import { HardDrive, Plus, Trash2, Youtube } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { useNavigate, useSearchParams } from 'react-router';
 
 import { VideoCard } from '@/components/video/video-card';
 import { VideoFiltersComponent } from '@/components/video/video-filters';
@@ -34,11 +34,57 @@ const defaultFilters: VideoFilters = {
   progressRange: 'all',
 };
 
+const parseFiltersFromSearchParams = (
+  searchParams: URLSearchParams,
+): VideoFilters => {
+  return {
+    search: searchParams.get('search') || '',
+    status: (searchParams.get('status') as VideoFilters['status']) || 'all',
+    sortBy:
+      (searchParams.get('sortBy') as VideoFilters['sortBy']) || 'created_at',
+    sortOrder:
+      (searchParams.get('sortOrder') as VideoFilters['sortOrder']) || 'desc',
+    durationRange:
+      (searchParams.get('durationRange') as VideoFilters['durationRange']) ||
+      'all',
+    progressRange:
+      (searchParams.get('progressRange') as VideoFilters['progressRange']) ||
+      'all',
+  };
+};
+
+const updateSearchParamsFromFilters = (
+  searchParams: URLSearchParams,
+  filters: VideoFilters,
+) => {
+  const newSearchParams = new URLSearchParams();
+
+  Object.entries(filters).forEach(([key, value]) => {
+    if (
+      value &&
+      value !== '' &&
+      value !== 'all' &&
+      !(key === 'sortBy' && value === 'created_at') &&
+      !(key === 'sortOrder' && value === 'desc')
+    ) {
+      newSearchParams.set(key, value);
+    }
+  });
+
+  return newSearchParams;
+};
+
 export const VideosPage = () => {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [videoUrl, setVideoUrl] = useState('');
   const [isAddingVideo, setIsAddingVideo] = useState(false);
-  const [filters, setFilters] = useState<VideoFilters>(defaultFilters);
+
+  // Initialize filters from URL search params
+  const [filters, setFilters] = useState<VideoFilters>(() => {
+    return parseFiltersFromSearchParams(searchParams);
+  });
+
   const [useFilteredQuery, setUseFilteredQuery] = useState(false);
 
   // API queries
@@ -93,6 +139,12 @@ export const VideosPage = () => {
   useEffect(() => {
     setUseFilteredQuery(hasActiveFilters);
   }, [hasActiveFilters]);
+
+  // Update filters when URL search params change (e.g., browser back/forward)
+  useEffect(() => {
+    const newFilters = parseFiltersFromSearchParams(searchParams);
+    setFilters(newFilters);
+  }, [searchParams]);
 
   const handleVideoUrlSubmit = () => {
     if (videoUrl) {
@@ -176,10 +228,18 @@ export const VideosPage = () => {
 
   const handleFiltersChange = (newFilters: VideoFilters) => {
     setFilters(newFilters);
+    // Update URL search params
+    const newSearchParams = updateSearchParamsFromFilters(
+      new URLSearchParams(searchParams),
+      newFilters,
+    );
+    setSearchParams(newSearchParams, { replace: true });
   };
 
   const handleClearFilters = () => {
     setFilters(defaultFilters);
+    // Clear URL search params
+    setSearchParams(new URLSearchParams(), { replace: true });
   };
 
   const refetchData = () => {
@@ -190,13 +250,8 @@ export const VideosPage = () => {
     }
   };
 
-  const filteredVideosForDisplay = (filters.search || '').trim()
-    ? videos.filter((video) =>
-        video.title
-          ?.toLowerCase()
-          .includes((filters.search || '').toLowerCase()),
-      )
-    : videos;
+  // Use videos directly since filtering is now done on backend
+  const filteredVideosForDisplay = videos;
 
   return (
     <>
@@ -259,50 +314,55 @@ export const VideosPage = () => {
         )}
 
         {/* Loading State */}
-        {isLoading && !filteredVideosForDisplay.length ? (
+        {isLoading ? (
           <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6'>
-            {Array.from({ length: videos.length ? videos.length + 1 : 5 }, () =>
-              uuidv4(),
-            ).map((id) => (
-              <Card key={id} className='overflow-hidden'>
+            {Array.from({ length: 8 }, () => uuidv4()).map((id) => (
+              <Card key={id} className='overflow-hidden animate-pulse'>
                 {/* Thumbnail skeleton */}
-                <div className='relative w-full h-40 bg-orange-50 animate-pulse'>
+                <div className='relative w-full h-40 bg-gray-200'>
                   <div className='absolute inset-0 flex items-center justify-center'>
-                    <div className='w-12 h-12 bg-orange-200 rounded-full animate-pulse' />
+                    <div className='w-12 h-12 bg-gray-300 rounded-full' />
                   </div>
                   {/* Progress bar skeleton */}
-                  <div className='absolute bottom-0 left-0 right-0 h-1 bg-orange-100'>
-                    <div className='h-full bg-orange-300 w-1/3 animate-pulse' />
+                  <div className='absolute bottom-0 left-0 right-0 h-1 bg-gray-300'>
+                    <div className='h-full bg-gray-400 w-1/3' />
+                  </div>
+                  {/* Note count skeleton */}
+                  <div className='absolute top-2 right-2 bg-gray-300 rounded px-2 py-1'>
+                    <div className='w-12 h-3 bg-gray-400 rounded' />
                   </div>
                 </div>
 
-                {/* Title skeleton */}
-                <div className='p-4 space-y-2'>
-                  <div className='h-4 bg-orange-100 rounded animate-pulse w-3/4' />
-                  <div className='h-4 bg-orange-100 rounded animate-pulse w-1/2' />
-                </div>
-
-                {/* Metadata skeleton */}
-                <div className='px-4 pb-4 space-y-3'>
-                  <div className='flex items-center justify-between'>
-                    <div className='flex items-center space-x-2'>
-                      <div className='w-4 h-4 bg-orange-200 rounded animate-pulse' />
-                      <div className='h-3 bg-orange-100 rounded animate-pulse w-16' />
-                    </div>
-                    <div className='flex items-center space-x-2'>
-                      <div className='w-4 h-4 bg-orange-200 rounded animate-pulse' />
-                      <div className='h-3 bg-orange-100 rounded animate-pulse w-20' />
-                    </div>
+                {/* Content skeleton */}
+                <div className='p-4 space-y-3'>
+                  {/* Title skeleton */}
+                  <div className='space-y-2'>
+                    <div className='h-4 bg-gray-200 rounded w-full' />
+                    <div className='h-4 bg-gray-200 rounded w-3/4' />
                   </div>
 
-                  <div className='flex items-center justify-between'>
-                    <div className='flex items-center space-x-2'>
-                      <div className='h-3 bg-orange-100 rounded animate-pulse w-12' />
-                      <div className='h-3 bg-orange-100 rounded animate-pulse w-16' />
+                  {/* Metadata skeleton */}
+                  <div className='space-y-2 pt-2'>
+                    <div className='flex items-center justify-between'>
+                      <div className='flex items-center space-x-2'>
+                        <div className='w-4 h-4 bg-gray-300 rounded' />
+                        <div className='h-3 bg-gray-200 rounded w-16' />
+                      </div>
+                      <div className='flex items-center space-x-2'>
+                        <div className='w-4 h-4 bg-gray-300 rounded' />
+                        <div className='h-3 bg-gray-200 rounded w-20' />
+                      </div>
                     </div>
-                    <div className='flex items-center space-x-2'>
-                      <div className='w-2 h-2 bg-orange-300 rounded-full animate-pulse' />
-                      <div className='h-3 bg-orange-100 rounded animate-pulse w-14' />
+
+                    <div className='flex items-center justify-between'>
+                      <div className='flex items-center space-x-2'>
+                        <div className='h-3 bg-gray-200 rounded w-12' />
+                        <div className='h-3 bg-gray-200 rounded w-16' />
+                      </div>
+                      <div className='flex items-center space-x-2'>
+                        <div className='w-2 h-2 bg-gray-300 rounded-full' />
+                        <div className='h-3 bg-gray-200 rounded w-14' />
+                      </div>
                     </div>
                   </div>
                 </div>

@@ -69,7 +69,7 @@ export const injectedVideosApi = api.injectEndpoints({
         if (filters.search) {
           params.append('search', filters.search);
         }
-        if (filters.status && filters.status !== 'all') {
+        if (filters.status) {
           params.append('status', filters.status);
         }
         if (filters.sortBy && filters.sortBy !== 'created_at') {

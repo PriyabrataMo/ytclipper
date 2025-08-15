@@ -14,6 +14,7 @@ func SetupVideoRoutes(router *gin.RouterGroup, handlers *VideoHandlers, authMidd
 		videoRoutes.GET("/:id", handlers.GetVideoByID)
 		videoRoutes.DELETE("/:id", handlers.DeleteVideo)
 		videoRoutes.DELETE("/:id/hard", handlers.HardDeleteVideo)
+		videoRoutes.PUT("/:id/restore", handlers.RestoreVideo)
 		videoRoutes.PUT("/metadata", handlers.UpdateVideoMetadataHandler)
 
 		videoRoutes.PUT("/:id/watched-duration", handlers.UpdateWatchedDurationHandler)

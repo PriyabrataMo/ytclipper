@@ -46,12 +46,81 @@ func (v *VideoHandlers) GetAllVideos(c *gin.Context) {
 
 	ctx := context.Background()
 
+	// Parse query parameters for filtering
+	search := c.Query("search")
+	status := c.Query("status")
+	sortBy := c.Query("sortBy")
+	sortOrder := c.Query("sortOrder")
+	durationRange := c.Query("durationRange")
+	progressRange := c.Query("progressRange")
+
+	// Default values
+	if sortBy == "" {
+		sortBy = "created_at"
+	}
+	if sortOrder == "" {
+		sortOrder = "desc"
+	}
+	if status == "" {
+		status = "all"
+	}
+
+	// Build base query
 	var videos []models.Video
-	err = v.db.DB.NewSelect().
-		Model(&videos).
-		Where("user_id = ? AND deleted_at IS NULL", userID).
-		Order("created_at DESC").
-		Scan(ctx)
+	query := v.db.DB.NewSelect().Model(&videos)
+	query = query.Where("user_id = ?", userID)
+
+	// Apply status filter
+	switch status {
+	case "active":
+		query = query.Where("deleted_at IS NULL")
+	case "deleted":
+		query = query.Where("deleted_at IS NOT NULL")
+	case "all":
+		// No additional filter - include both active and deleted
+	default:
+		query = query.Where("deleted_at IS NULL") // Default to active only
+	}
+
+	// Apply search filter
+	if search != "" {
+		query = query.Where("title ILIKE ? OR channel_title ILIKE ?", "%"+search+"%", "%"+search+"%")
+	}
+
+	// Apply duration range filter
+	if durationRange != "" && durationRange != "all" {
+		switch durationRange {
+		case "short":
+			query = query.Where("duration < ?", 300) // < 5 minutes
+		case "medium":
+			query = query.Where("duration >= ? AND duration <= ?", 300, 1200) // 5-20 minutes
+		case "long":
+			query = query.Where("duration > ?", 1200) // > 20 minutes
+		}
+	}
+
+	// Apply sorting
+	var orderClause string
+	switch sortBy {
+	case "title":
+		orderClause = "title"
+	case "duration":
+		orderClause = "duration"
+	case "watched_duration":
+		orderClause = "watched_duration"
+	default:
+		orderClause = "created_at"
+	}
+
+	if sortOrder == "asc" {
+		orderClause += " ASC"
+	} else {
+		orderClause += " DESC"
+	}
+
+	query = query.Order(orderClause)
+
+	err = query.Scan(ctx)
 
 	if err != nil {
 		middleware.RespondWithError(c, http.StatusInternalServerError, "DB_READ_ERROR", "Failed to fetch videos", gin.H{
@@ -86,6 +155,30 @@ func (v *VideoHandlers) GetAllVideos(c *gin.Context) {
 			latestTimestampStr = &isoString
 		}
 
+		// Apply progress range filter after calculating watched duration percentage
+		var progressPercentage float64
+		if video.Duration > 0 {
+			progressPercentage = float64(video.WatchedDuration) / float64(video.Duration) * 100
+		}
+
+		// Skip video if it doesn't match progress filter
+		if progressRange != "" && progressRange != "all" {
+			switch progressRange {
+			case "not_started":
+				if progressPercentage > 0 {
+					continue
+				}
+			case "in_progress":
+				if progressPercentage <= 0 || progressPercentage >= 100 {
+					continue
+				}
+			case "completed":
+				if progressPercentage < 100 {
+					continue
+				}
+			}
+		}
+
 		videoMap[video.VideoID] = gin.H{
 			"video_id":         video.VideoID,
 			"youtube_url":      video.YouTubeURL,
@@ -103,12 +196,27 @@ func (v *VideoHandlers) GetAllVideos(c *gin.Context) {
 			"count":            count,
 			"latest_timestamp": latestTimestampStr,
 			"created_at":       video.CreatedAt,
+			"deleted_at":       video.DeletedAt,
 		}
 	}
 
 	var result []gin.H
 	for _, video := range videoMap {
 		result = append(result, video)
+	}
+
+	// Apply sort by count if specified (since it's computed after DB query)
+	if sortBy == "count" {
+		// Sort result slice by count
+		for i := 0; i < len(result)-1; i++ {
+			for j := i + 1; j < len(result); j++ {
+				count1 := result[i]["count"].(int)
+				count2 := result[j]["count"].(int)
+				if (sortOrder == "asc" && count1 > count2) || (sortOrder == "desc" && count1 < count2) {
+					result[i], result[j] = result[j], result[i]
+				}
+			}
+		}
 	}
 
 	middleware.RespondWithOK(c, gin.H{
@@ -343,6 +451,94 @@ func (v *VideoHandlers) HardDeleteVideo(c *gin.Context) {
 
 	middleware.RespondWithOK(c, gin.H{
 		"message": "Video and all associated data permanently deleted",
+	})
+}
+
+func (v *VideoHandlers) RestoreVideo(c *gin.Context) {
+	userIDStr, exists := authhandlers.GetUserID(c)
+	if !exists {
+		middleware.RespondWithError(c, http.StatusUnauthorized, "NO_USER_ID", "User ID not found", nil)
+		return
+	}
+
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		middleware.RespondWithError(c, http.StatusBadRequest, "INVALID_USER_ID", "Invalid user ID format", gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	videoID := c.Param("id")
+	if videoID == "" {
+		middleware.RespondWithError(c, http.StatusBadRequest, "MISSING_VIDEO_ID", "Video ID is required", nil)
+		return
+	}
+
+	ctx := context.Background()
+	tx, err := v.db.DB.BeginTx(ctx, nil)
+	if err != nil {
+		middleware.RespondWithError(c, http.StatusInternalServerError, "DB_TRANSACTION_ERROR", "Failed to start transaction", gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+	commited := false
+	defer func() {
+		if !commited {
+			_ = tx.Rollback()
+		}
+	}()
+
+	// Restore video (set deleted_at to NULL)
+	_, err = tx.NewUpdate().
+		Model((*models.Video)(nil)).
+		Set("deleted_at = NULL").
+		Where("user_id = ? AND video_id = ? AND deleted_at IS NOT NULL", userID, videoID).
+		Exec(ctx)
+	if err != nil {
+		middleware.RespondWithError(c, http.StatusInternalServerError, "DB_ERROR", "Failed to restore video", gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	// Restore timestamps (set deleted_at to NULL)
+	_, err = tx.NewUpdate().
+		Model((*models.Timestamp)(nil)).
+		Set("deleted_at = NULL").
+		Where("user_id = ? AND video_id = ? AND deleted_at IS NOT NULL", userID, videoID).
+		Exec(ctx)
+	if err != nil {
+		middleware.RespondWithError(c, http.StatusInternalServerError, "DB_ERROR", "Failed to restore video timestamps", gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	// Restore transcript embeddings (set deleted_at to NULL)
+	_, err = tx.NewUpdate().
+		Model((*models.TranscriptEmbedding)(nil)).
+		Set("deleted_at = NULL").
+		Where("user_id = ? AND video_id = ? AND deleted_at IS NOT NULL", userID, videoID).
+		Exec(ctx)
+	if err != nil {
+		middleware.RespondWithError(c, http.StatusInternalServerError, "DB_ERROR", "Failed to restore video transcript embeddings", gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		middleware.RespondWithError(c, http.StatusInternalServerError, "DB_COMMIT_ERROR", "Failed to commit transaction", gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+	commited = true
+
+	middleware.RespondWithOK(c, gin.H{
+		"message": "Video and all associated data restored successfully",
 	})
 }
 
