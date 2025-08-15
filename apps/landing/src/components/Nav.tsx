@@ -1,6 +1,6 @@
 import { Menu, X } from 'lucide-react';
 import { useState } from 'react';
-import { Link } from 'react-router';
+import Link from 'next/link';
 
 type NavItem = {
   label: string;
@@ -67,7 +67,7 @@ const Nav = () => {
       >
         <div data-testid='nav-logo'>
           <Link
-            to='/'
+            href='/'
             className='flex items-center gap-2'
             data-testid='nav-home-link'
           >
@@ -122,10 +122,10 @@ const Nav = () => {
 
           <div className='flex flex-col gap-3 mt-auto mb-8'>
             <button className='btn-primary w-full'>
-              <Link to='/auth/login'>Sign In</Link>
+              <Link href='/auth/login'>Sign In</Link>
             </button>
             <button className='btn-outline w-full'>
-              <Link to='/auth/register'>Get Started Free</Link>
+              <Link href='/auth/register'>Get Started Free</Link>
             </button>
           </div>
         </div>
@@ -139,7 +139,7 @@ const Nav = () => {
       >
         <div data-testid='nav-logo'>
           <Link
-            to='/'
+            href='/'
             className='flex items-center gap-3'
             data-testid='nav-home-link'
           >
@@ -169,10 +169,12 @@ const Nav = () => {
 
           <div className='flex justify-center items-center gap-3'>
             <button className='text-lg font-medium text-gray-600 hover:text-orange-600 transition-colors px-4 py-2'>
-              <Link to='/auth/login'>Sign In</Link>
+              <Link href='https://app.ytclipper.com/auth/login'>Sign In</Link>
             </button>
             <button className='btn-primary'>
-              <Link to='/auth/register'>Get Started Free</Link>
+              <Link href='https://app.ytclipper.com/auth/register'>
+                Get Started Free
+              </Link>
             </button>
           </div>
         </div>

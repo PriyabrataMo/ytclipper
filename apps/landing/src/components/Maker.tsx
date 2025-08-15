@@ -1,4 +1,5 @@
 import { Github, Mail, Users } from 'lucide-react';
+import Image from 'next/image';
 
 const Maker = () => {
   const makers = [
@@ -69,7 +70,9 @@ const Maker = () => {
               <div className='relative h-full flex'>
                 {/* Image Section - Half Width, Full Height */}
                 <div className='w-[40%] md:w-1/2 h-full relative'>
-                  <img
+                  <Image
+                    width={100}
+                    height={100}
                     src={maker.image}
                     alt={maker.name}
                     className='w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500'
@@ -100,6 +103,7 @@ const Maker = () => {
                     <a
                       href={maker.github}
                       target='_blank'
+                      title='github'
                       rel='noopener noreferrer'
                       className='w-10 h-10 bg-gray-100 hover:bg-orange-100 border border-gray-200 hover:border-orange-200 rounded-lg flex items-center justify-center transition-all duration-300 group-hover:scale-110'
                     >
@@ -108,6 +112,7 @@ const Maker = () => {
                     <a
                       href={maker.x}
                       target='_blank'
+                      title='x'
                       rel='noopener noreferrer'
                       className='w-10 h-10 bg-gray-100 hover:bg-orange-100 border border-gray-200 hover:border-orange-200 rounded-lg flex items-center justify-center transition-all duration-300 group-hover:scale-110'
                     >
@@ -121,6 +126,7 @@ const Maker = () => {
                     </a>
                     <a
                       href={`mailto:${maker.email}`}
+                      title='email'
                       className='w-10 h-10 bg-gray-100 hover:bg-orange-100 border border-gray-200 hover:border-orange-200 rounded-lg flex items-center justify-center transition-all duration-300 group-hover:scale-110'
                     >
                       <Mail className='w-4 h-4 text-gray-600 group-hover:text-orange-600 transition-colors' />

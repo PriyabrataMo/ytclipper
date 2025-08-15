@@ -31,7 +31,7 @@ const Features = () => {
       title: 'Smart Video Integration',
       description:
         'Seamlessly embed and control YouTube videos with our intuitive interface and real-time synchronization.',
-      color: 'from-blue-500 to-blue-600',
+      color: 'from-indigo-500 to-indigo-600',
       isWide: true, // Makes card span 2 columns on desktop
     },
     {
@@ -106,10 +106,8 @@ const Features = () => {
         `}
         >
           <feature.icon
-            className={`
-            text-white 
-            ${feature.isWide ? 'w-8 h-8' : 'w-7 h-7'}
-          `}
+            strokeWidth={3}
+            className={`${feature.isWide ? 'w-8 h-8' : 'w-7 h-7'} text-white`}
           />
         </div>
 
