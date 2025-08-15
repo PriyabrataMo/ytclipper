@@ -1,5 +1,6 @@
 import { ArrowRight, CheckCircle, Play, Star } from 'lucide-react';
-import { Link } from 'react-router';
+// import Image from 'next/image';
+import Link from 'next/link';
 
 const Hero = () => {
   return (
@@ -39,13 +40,19 @@ const Hero = () => {
         {/* CTA Buttons */}
         <div className='flex flex-col sm:flex-row gap-4 w-full sm:w-auto'>
           <button className='btn-primary group flex items-center justify-center gap-2'>
-            <Link to='/auth/register' className='flex items-center gap-2'>
+            <Link
+              href='https://app.ytclipper.com/auth/register'
+              className='flex items-center gap-2'
+            >
               Get Started Free
               <ArrowRight className='w-4 h-4 group-hover:translate-x-1 transition-transform' />
             </Link>
           </button>
           <button className='btn-outline group flex items-center justify-center gap-2'>
-            <Link to='/demo' className='flex items-center gap-2'>
+            <Link
+              href='https://app.ytclipper.com/demo'
+              className='flex items-center gap-2'
+            >
               <Play className='w-4 h-4' />
               Watch Demo
             </Link>
