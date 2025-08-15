@@ -42,7 +42,7 @@ export interface UpdateWatchedDurationRequest {
 
 export interface VideoFilters {
   search?: string;
-  status?: 'all' | 'active' | 'deleted';
+  status?: 'active' | 'deleted';
   sortBy?: 'created_at' | 'title' | 'duration' | 'count' | 'watched_duration';
   sortOrder?: 'asc' | 'desc';
   durationRange?: 'all' | 'short' | 'medium' | 'long';
@@ -90,6 +90,7 @@ export const injectedVideosApi = api.injectEndpoints({
           ? `/ytclipper/videos?${queryString}`
           : '/ytclipper/videos';
       },
+      providesTags: ['Video'],
       async onQueryStarted(_, { dispatch, queryFulfilled }) {
         try {
           const { data } = await queryFulfilled;
@@ -109,6 +110,7 @@ export const injectedVideosApi = api.injectEndpoints({
         url: `/ytclipper/videos/${videoId}`,
         method: 'DELETE',
       }),
+      invalidatesTags: ['Video'],
     }),
     hardDeleteVideo: builder.mutation<
       UniversalResponse<{ message: string }>,
@@ -118,6 +120,7 @@ export const injectedVideosApi = api.injectEndpoints({
         url: `/ytclipper/videos/${videoId}/hard`,
         method: 'DELETE',
       }),
+      invalidatesTags: ['Video'],
     }),
     restoreVideo: builder.mutation<
       UniversalResponse<{ message: string }>,
@@ -127,6 +130,7 @@ export const injectedVideosApi = api.injectEndpoints({
         url: `/ytclipper/videos/${videoId}/restore`,
         method: 'PUT',
       }),
+      invalidatesTags: ['Video'],
     }),
     updateVideoMetadata: builder.mutation<
       UniversalResponse<{ message: string }>,

@@ -14,7 +14,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 export interface VideoFilters {
   search?: string;
-  status?: 'all' | 'active' | 'deleted';
+  status?: 'active' | 'deleted';
   sortBy?: 'created_at' | 'title' | 'duration' | 'count' | 'watched_duration';
   sortOrder?: 'asc' | 'desc';
   durationRange?: 'all' | 'short' | 'medium' | 'long';
@@ -25,7 +25,6 @@ interface VideoFiltersProps {
   filters: VideoFilters;
   onFiltersChange: (filters: VideoFilters) => void;
   onClearFilters: () => void;
-  totalVideos: number;
   activeVideos: number;
   deletedVideos: number;
 }
@@ -34,7 +33,6 @@ export const VideoFiltersComponent = ({
   filters,
   onFiltersChange,
   onClearFilters,
-  totalVideos,
   activeVideos,
   deletedVideos,
 }: VideoFiltersProps) => {
@@ -74,6 +72,9 @@ export const VideoFiltersComponent = ({
     if (key === 'sortOrder') {
       return value !== 'desc';
     }
+    if (key === 'status') {
+      return value !== 'active';
+    }
     return value !== 'all';
   });
 
@@ -83,7 +84,12 @@ export const VideoFiltersComponent = ({
   };
 
   const activeFilterCount = Object.values(filters).filter(
-    (v) => v !== 'all' && v !== '' && v !== 'created_at' && v !== 'desc',
+    (v) =>
+      v !== 'all' &&
+      v !== '' &&
+      v !== 'created_at' &&
+      v !== 'desc' &&
+      v !== 'active',
   ).length;
 
   return (
@@ -122,14 +128,13 @@ export const VideoFiltersComponent = ({
           </div>
 
           <Select
-            value={filters.status || 'all'}
+            value={filters.status || 'active'}
             onValueChange={(value) => handleFilterChange('status', value)}
           >
             <SelectTrigger className='w-40 bg-white'>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value='all'>All ({totalVideos})</SelectItem>
               <SelectItem value='active'>Active ({activeVideos})</SelectItem>
               <SelectItem value='deleted'>Deleted ({deletedVideos})</SelectItem>
             </SelectContent>
@@ -195,14 +200,14 @@ export const VideoFiltersComponent = ({
                 </button>
               </Badge>
             ) : null}
-            {filters.status !== 'all' ? (
+            {filters.status !== 'active' ? (
               <Badge
                 variant='secondary'
                 className='bg-green-50 text-green-700 border-green-200'
               >
                 Status: {filters.status}
                 <button
-                  onClick={() => handleFilterChange('status', 'all')}
+                  onClick={() => handleFilterChange('status', 'active')}
                   className='ml-1 hover:bg-green-100 rounded-full p-0.5'
                 >
                   <X className='w-3 h-3' />

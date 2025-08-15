@@ -27,7 +27,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 const defaultFilters: VideoFilters = {
   search: '',
-  status: 'all',
+  status: 'active',
   sortBy: 'created_at',
   sortOrder: 'desc',
   durationRange: 'all',
@@ -39,7 +39,7 @@ const parseFiltersFromSearchParams = (
 ): VideoFilters => {
   return {
     search: searchParams.get('search') || '',
-    status: (searchParams.get('status') as VideoFilters['status']) || 'all',
+    status: (searchParams.get('status') as VideoFilters['status']) || 'active',
     sortBy:
       (searchParams.get('sortBy') as VideoFilters['sortBy']) || 'created_at',
     sortOrder:
@@ -281,7 +281,6 @@ export const VideosPage = () => {
             filters={filters}
             onFiltersChange={handleFiltersChange}
             onClearFilters={handleClearFilters}
-            totalVideos={totalVideos}
             activeVideos={activeVideos}
             deletedVideos={deletedVideos}
           />

@@ -15,6 +15,7 @@ import (
 	"github.com/shubhamku044/ytclipper/internal/middleware"
 	"github.com/shubhamku044/ytclipper/internal/models"
 	"github.com/shubhamku044/ytclipper/internal/services"
+	"github.com/uptrace/bun"
 )
 
 type VideoHandlers struct {
@@ -46,7 +47,6 @@ func (v *VideoHandlers) GetAllVideos(c *gin.Context) {
 
 	ctx := context.Background()
 
-	// Parse query parameters for filtering
 	search := c.Query("search")
 	status := c.Query("status")
 	sortBy := c.Query("sortBy")
@@ -54,7 +54,6 @@ func (v *VideoHandlers) GetAllVideos(c *gin.Context) {
 	durationRange := c.Query("durationRange")
 	progressRange := c.Query("progressRange")
 
-	// Default values
 	if sortBy == "" {
 		sortBy = "created_at"
 	}
@@ -62,54 +61,53 @@ func (v *VideoHandlers) GetAllVideos(c *gin.Context) {
 		sortOrder = "desc"
 	}
 	if status == "" {
-		status = "all"
+		status = "active"
 	}
 
-	// Build base query
 	var videos []models.Video
-	query := v.db.DB.NewSelect().Model(&videos)
-	query = query.Where("user_id = ?", userID)
+	var query *bun.SelectQuery
 
-	// Apply status filter
+	baseQuery := v.db.DB.NewSelect().
+		TableExpr("videos AS v").
+		Column("v.*").
+		Where("v.user_id = ?", userID)
+
 	switch status {
 	case "active":
-		query = query.Where("deleted_at IS NULL")
+		baseQuery = baseQuery.Where("v.deleted_at IS NULL")
 	case "deleted":
-		query = query.Where("deleted_at IS NOT NULL")
-	case "all":
-		// No additional filter - include both active and deleted
+		baseQuery = baseQuery.Where("v.deleted_at IS NOT NULL")
 	default:
-		query = query.Where("deleted_at IS NULL") // Default to active only
+		baseQuery = baseQuery.Where("v.deleted_at IS NULL")
 	}
 
-	// Apply search filter
+	query = baseQuery
+
 	if search != "" {
-		query = query.Where("title ILIKE ? OR channel_title ILIKE ?", "%"+search+"%", "%"+search+"%")
+		query = query.Where("v.title ILIKE ? OR v.channel_title ILIKE ?", "%"+search+"%", "%"+search+"%")
 	}
 
-	// Apply duration range filter
 	if durationRange != "" && durationRange != "all" {
 		switch durationRange {
 		case "short":
-			query = query.Where("duration < ?", 300) // < 5 minutes
+			query = query.Where("v.duration < ?", 300)
 		case "medium":
-			query = query.Where("duration >= ? AND duration <= ?", 300, 1200) // 5-20 minutes
+			query = query.Where("v.duration >= ? AND v.duration <= ?", 300, 1200)
 		case "long":
-			query = query.Where("duration > ?", 1200) // > 20 minutes
+			query = query.Where("v.duration > ?", 1200)
 		}
 	}
 
-	// Apply sorting
 	var orderClause string
 	switch sortBy {
 	case "title":
-		orderClause = "title"
+		orderClause = "v.title"
 	case "duration":
-		orderClause = "duration"
+		orderClause = "v.duration"
 	case "watched_duration":
-		orderClause = "watched_duration"
+		orderClause = "v.watched_duration"
 	default:
-		orderClause = "created_at"
+		orderClause = "v.created_at"
 	}
 
 	if sortOrder == "asc" {
@@ -120,7 +118,7 @@ func (v *VideoHandlers) GetAllVideos(c *gin.Context) {
 
 	query = query.Order(orderClause)
 
-	err = query.Scan(ctx)
+	err = query.Scan(ctx, &videos)
 
 	if err != nil {
 		middleware.RespondWithError(c, http.StatusInternalServerError, "DB_READ_ERROR", "Failed to fetch videos", gin.H{
@@ -155,13 +153,11 @@ func (v *VideoHandlers) GetAllVideos(c *gin.Context) {
 			latestTimestampStr = &isoString
 		}
 
-		// Apply progress range filter after calculating watched duration percentage
 		var progressPercentage float64
 		if video.Duration > 0 {
 			progressPercentage = float64(video.WatchedDuration) / float64(video.Duration) * 100
 		}
 
-		// Skip video if it doesn't match progress filter
 		if progressRange != "" && progressRange != "all" {
 			switch progressRange {
 			case "not_started":
@@ -205,9 +201,7 @@ func (v *VideoHandlers) GetAllVideos(c *gin.Context) {
 		result = append(result, video)
 	}
 
-	// Apply sort by count if specified (since it's computed after DB query)
 	if sortBy == "count" {
-		// Sort result slice by count
 		for i := 0; i < len(result)-1; i++ {
 			for j := i + 1; j < len(result); j++ {
 				count1 := result[i]["count"].(int)
@@ -404,7 +398,6 @@ func (v *VideoHandlers) HardDeleteVideo(c *gin.Context) {
 		}
 	}()
 
-	// Only hard delete if soft deleted (deleted_at IS NOT NULL)
 	_, err = tx.NewDelete().
 		Model((*models.Video)(nil)).
 		Where("user_id = ? AND video_id = ?", userID, videoID).
@@ -490,10 +483,27 @@ func (v *VideoHandlers) RestoreVideo(c *gin.Context) {
 		}
 	}()
 
-	// Restore video (set deleted_at to NULL)
+	var video models.Video
+	err = tx.NewSelect().
+		Table("videos").
+		Where("user_id = ? AND video_id = ?", userID, videoID).
+		Scan(ctx, &video)
+
+	if err != nil {
+		middleware.RespondWithError(c, http.StatusNotFound, "VIDEO_NOT_FOUND", "Video not found", gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	if video.DeletedAt == nil {
+		middleware.RespondWithError(c, http.StatusBadRequest, "VIDEO_NOT_DELETED", "Video is not deleted", nil)
+		return
+	}
+
 	_, err = tx.NewUpdate().
-		Model((*models.Video)(nil)).
-		Set("deleted_at = NULL").
+		Table("videos").
+		Set("deleted_at = ?", nil).
 		Where("user_id = ? AND video_id = ? AND deleted_at IS NOT NULL", userID, videoID).
 		Exec(ctx)
 	if err != nil {
@@ -503,10 +513,9 @@ func (v *VideoHandlers) RestoreVideo(c *gin.Context) {
 		return
 	}
 
-	// Restore timestamps (set deleted_at to NULL)
 	_, err = tx.NewUpdate().
-		Model((*models.Timestamp)(nil)).
-		Set("deleted_at = NULL").
+		Table("timestamps").
+		Set("deleted_at = ?", nil).
 		Where("user_id = ? AND video_id = ? AND deleted_at IS NOT NULL", userID, videoID).
 		Exec(ctx)
 	if err != nil {
@@ -516,14 +525,13 @@ func (v *VideoHandlers) RestoreVideo(c *gin.Context) {
 		return
 	}
 
-	// Restore transcript embeddings (set deleted_at to NULL)
 	_, err = tx.NewUpdate().
-		Model((*models.TranscriptEmbedding)(nil)).
-		Set("deleted_at = NULL").
+		Table("transcript_embeddings").
+		Set("deleted_at = ?", nil).
 		Where("user_id = ? AND video_id = ? AND deleted_at IS NOT NULL", userID, videoID).
 		Exec(ctx)
 	if err != nil {
-		middleware.RespondWithError(c, http.StatusInternalServerError, "DB_ERROR", "Failed to restore video transcript embeddings", gin.H{
+		middleware.RespondWithError(c, http.StatusInternalServerError, "DB_ERROR", "Failed to restore transcript embeddings", gin.H{
 			"error": err.Error(),
 		})
 		return
@@ -648,7 +656,6 @@ func (v *VideoHandlers) CreateVideoIfNotExists(ctx context.Context, userID uuid.
 	}
 
 	if !exists {
-		// Check usage limit before creating video
 		canAdd, err := v.featureUsageService.CheckUsageLimit(ctx, userID, "videos")
 		if err != nil {
 			return err
@@ -674,7 +681,6 @@ func (v *VideoHandlers) CreateVideoIfNotExists(ctx context.Context, userID uuid.
 
 		err = v.featureUsageService.IncrementUsage(ctx, userID, "videos")
 		if err != nil {
-			// Log error but don't fail the video creation
 			log.Printf("Warning: Failed to increment video usage: %v", err)
 		}
 
@@ -773,7 +779,6 @@ func (v *VideoHandlers) UpdateVideoMetadataHandler(c *gin.Context) {
 			Title:      req.Title,
 		}
 
-		// Set optional fields if provided
 		if req.Duration != nil {
 			video.Duration = *req.Duration
 		}
@@ -795,7 +800,6 @@ func (v *VideoHandlers) UpdateVideoMetadataHandler(c *gin.Context) {
 			return
 		}
 
-		// Increment usage after successful video creation
 		err = v.featureUsageService.IncrementUsage(ctx, userID, "videos")
 		if err != nil {
 			log.Printf("Warning: Failed to increment video usage: %v", err)
@@ -815,7 +819,6 @@ func (v *VideoHandlers) UpdateVideoMetadataHandler(c *gin.Context) {
 		Set("updated_at = NOW()").
 		Where("user_id = ? AND video_id = ? AND deleted_at IS NULL", userID, req.VideoID)
 
-	// Add optional fields to update
 	if req.Duration != nil {
 		updateQuery = updateQuery.Set("duration = ?", *req.Duration)
 	}
@@ -857,7 +860,6 @@ func (v *VideoHandlers) GetOrCreateVideoByYouTubeURL(ctx context.Context, userID
 		return video, nil
 	}
 
-	// Check usage limit before creating video
 	canAdd, err := v.featureUsageService.CheckUsageLimit(ctx, userID, "videos")
 	if err != nil {
 		return nil, err
@@ -932,7 +934,6 @@ func (v *VideoHandlers) UpdateWatchedDurationHandler(c *gin.Context) {
 
 	if err != nil {
 		if err.Error() == "no rows in result set" {
-			// Check usage limit before creating video
 			canAdd, err := v.featureUsageService.CheckUsageLimit(ctx, userID, "videos")
 			if err != nil {
 				middleware.RespondWithError(c, http.StatusInternalServerError, "USAGE_CHECK_ERROR", "Failed to check usage limit", gin.H{
