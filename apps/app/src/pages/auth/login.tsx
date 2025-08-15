@@ -8,6 +8,7 @@ import {
   CardContent,
   CardHeader,
   CardTitle,
+  toast,
 } from '@ytclipper/ui';
 import { AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { useState } from 'react';
@@ -31,10 +32,8 @@ export const LoginPage = () => {
   const handleGoogleLogin = async () => {
     try {
       const result = await triggerGetGoogleUrl().unwrap();
-      console.log('Google login result:', result);
 
       if (result?.data.auth_url) {
-        console.log('Redirecting to Google login URL:', result.data.auth_url);
         window.location.href = result.data.auth_url;
       } else {
         console.error('No auth_url found in response:', result);
@@ -51,12 +50,18 @@ export const LoginPage = () => {
       const response = await login({
         email: formData.email,
         password: formData.password,
-      });
-      if (response?.data?.success) {
+      }).unwrap();
+      if (response.success) {
         navigate(from, { replace: true });
       }
-    } catch (error) {
-      console.error('Error logging in:', error);
+    } catch (err) {
+      const error = err as {
+        data?: { error?: { message?: string; details?: string } };
+        message?: string;
+      };
+      toast('Login failed', {
+        description: error?.data?.error?.message,
+      });
     }
   };
 

@@ -30,6 +30,7 @@ import {
   DialogTitle,
   Input,
   ScrollArea,
+  toast,
 } from '@ytclipper/ui';
 import {
   Clock,
@@ -47,7 +48,9 @@ import {
   X,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { useDispatch } from 'react-redux';
 import { useDebounce } from '../../hooks/use-debounce';
+import { setGotoTimestamp } from '../../store/slices/timestampSlice';
 
 interface Timestamp {
   id: string;
@@ -91,6 +94,8 @@ export const NotesPanel = ({
   const [tagInput, setTagInput] = useState('');
   const [showTagSuggestions, setShowTagSuggestions] = useState(false);
 
+  const dispatch = useDispatch();
+
   const {
     data: timestampsData,
     isLoading: timestampsLoading,
@@ -124,6 +129,16 @@ export const NotesPanel = ({
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
 
+  useEffect(() => {
+    if (!isAddingNote && !isEditingNote) {
+      document.body.style.overflow = '';
+    }
+    // Optionally, clean up on unmount
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isAddingNote, isEditingNote]);
+
   const handleAddNote = async () => {
     if (newNote.title.trim()) {
       try {
@@ -139,16 +154,49 @@ export const NotesPanel = ({
         setIsAddingNote(false);
         onResumeVideo?.();
         refetch();
-      } catch (error) {
-        console.error('Failed to create note:', error);
+        toast.success('Note created successfully!');
+      } catch (error: unknown) {
+        // Check if it's a usage limit exceeded error
+        const errorData = error as {
+          data?: { error?: { code?: string; details?: { feature?: string } } };
+        };
+        if (errorData?.data?.error?.code === 'USAGE_LIMIT_EXCEEDED') {
+          const feature = errorData?.data?.error?.details?.feature;
+          let message = 'Usage limit exceeded for your current plan.';
+
+          if (feature === 'notes') {
+            message = 'You have reached the note limit for your current plan.';
+          } else if (feature === 'videos') {
+            message = 'You have reached the video limit for your current plan.';
+          } else if (feature === 'ai_summaries') {
+            message =
+              'You have reached the AI summary limit for your current plan.';
+          } else if (feature === 'ai_questions') {
+            message =
+              'You have reached the AI question limit for your current plan.';
+          }
+
+          toast.error(message, {
+            description: 'Upgrade your plan to continue using this feature.',
+            action: {
+              label: 'Upgrade Now',
+              onClick: () => {
+                // Navigate to pricing page
+                window.location.href = '/pricing';
+              },
+            },
+          });
+        } else {
+          // Generic error
+          toast.error('Failed to create note. Please try again.');
+        }
       }
     }
   };
 
   const handleUpdateNote = async (id: string) => {
     try {
-      console.log('Updating note:', id, editingNote);
-      const result = await updateTimestamp({
+      await updateTimestamp({
         id,
         data: {
           title: editingNote.title,
@@ -156,13 +204,14 @@ export const NotesPanel = ({
           tags: editingNote.tags,
         },
       }).unwrap();
-      console.log('Update successful:', result);
       setIsEditingNote(null);
       setEditingNote({ title: '', note: '', tags: [] });
       setIsPreviewMode(false);
       refetch();
-    } catch (error) {
+      toast.success('Note updated successfully!');
+    } catch (error: unknown) {
       console.error('Failed to update note:', error);
+      toast.error('Failed to update note. Please try again.');
     }
   };
 
@@ -171,8 +220,10 @@ export const NotesPanel = ({
       await deleteTimestamp(id).unwrap();
       setNoteToDelete(null);
       refetch();
-    } catch (error) {
+      toast.success('Note deleted successfully!');
+    } catch (error: unknown) {
       console.error('Failed to delete note:', error);
+      toast.error('Failed to delete note. Please try again.');
     }
   };
 
@@ -304,22 +355,22 @@ export const NotesPanel = ({
   };
 
   return (
-    <div className='h-full bg-white border-l border-gray-200 flex flex-col min-w-0'>
+    <div className='h-full bg-white border flex flex-col min-w-0 rounded-xl pb-4'>
       {/* Header */}
-      <div className='p-4 border-b border-gray-200 bg-white flex-shrink-0'>
+      <div className='p-4 border-b border-primary bg-white flex-shrink-0 rounded-t-xl'>
         <div className='flex items-center justify-between'>
-          <div className='min-w-0 flex-1'>
+          <div className='min-w-0 flex-1 rounded-t-xl'>
             <h2 className='text-lg font-semibold text-gray-900 flex items-center gap-2'>
               <FileText className='h-5 w-5 text-gray-600 flex-shrink-0' />
               <span className='truncate'>Video Notes</span>
             </h2>
             <p className='text-sm text-gray-600 mt-1 truncate'>
-              {notes.length} notes • Current:{' '}
+              {timestampsData?.data.count} notes • Current:{' '}
               {formatTime(timeStampsSliceData.currentTimestamp)}
             </p>
           </div>
           <div className='flex gap-2 flex-shrink-0 ml-2'>
-            {notes.length > 0 && (
+            {timestampsData?.data && timestampsData?.data.count > 0 ? (
               <Button
                 variant='outline'
                 size='sm'
@@ -329,7 +380,7 @@ export const NotesPanel = ({
                 <Download className='h-4 w-4' />
                 Export Notes
               </Button>
-            )}
+            ) : null}
             <Button
               variant='default'
               size='sm'
@@ -546,7 +597,7 @@ export const NotesPanel = ({
       </div>
 
       {currentNote ? (
-        <div className='mx-4 mt-4 flex-shrink-0'>
+        <div className='m-4 flex-shrink-0'>
           <Card className='bg-orange-50 border-orange-200'>
             <CardHeader className='pb-3'>
               <div className='flex items-center justify-between'>
@@ -587,7 +638,7 @@ export const NotesPanel = ({
       ) : null}
 
       <div className='flex-1 min-h-0'>
-        <div className='flex-1 h-[calc(100vh-150px)] relative p-4 justify-center w-full overflow-y-auto'>
+        <div className='flex-1 h-fit max-h-[80vh] relative px-4 pb-4 justify-center w-full overflow-y-auto'>
           {timestampsLoading ? (
             <div className='text-center py-8'>
               <div className='inline-flex items-center justify-center w-12 h-12 bg-gray-100 rounded-full mb-4'>
@@ -672,6 +723,39 @@ export const NotesPanel = ({
                           </div>
                         </div>
                         <div className='flex items-center gap-1 flex-shrink-0 justify-center'>
+                          <Button
+                            variant='ghost'
+                            size='sm'
+                            className='h-8 min-w-8 w-full p-0 hover:bg-gray-200'
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              dispatch(setGotoTimestamp(note.timestamp));
+                            }}
+                            disabled={isUpdating}
+                          >
+                            {isUpdating ? (
+                              <Loader2 className='h-4 w-4 animate-spin' />
+                            ) : (
+                              <>
+                                <svg
+                                  xmlns='http://www.w3.org/2000/svg'
+                                  width='24'
+                                  height='24'
+                                  viewBox='0 0 24 24'
+                                  fill='none'
+                                  stroke='currentColor'
+                                  strokeWidth='2'
+                                  strokeLinecap='round'
+                                  strokeLinejoin='round'
+                                >
+                                  <path d='M21 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h6' />
+                                  <path d='m21 3-9 9' />
+                                  <path d='M15 3h6v6' />
+                                </svg>
+                                <div className='md:hidden'>Goto</div>
+                              </>
+                            )}
+                          </Button>
                           <Button
                             variant='ghost'
                             size='sm'
@@ -916,9 +1000,9 @@ export const NotesPanel = ({
                             setTagInput('');
                             setShowTagSuggestions(false);
                           }}
-                          className='w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 border-b border-gray-100 last:border-b-0'
+                          className='w-full text-left px-3 py-2 hover:bg-gray-50 flex items-center gap-3 border-b border-gray-100 last:border-b-0 text-sm'
                         >
-                          <Tag className='h-4 w-4 text-gray-400' />
+                          <Tag className='h-3 w-3 text-gray-400' />
                           <span className='text-gray-700'>{tag.name}</span>
                         </button>
                       ))}
@@ -934,9 +1018,9 @@ export const NotesPanel = ({
                               setEditingNote((prev) => ({ ...prev, tags })),
                             )
                           }
-                          className='w-full text-left px-4 py-3 hover:bg-gray-50 flex items-center gap-3 text-orange-600 border-b border-gray-100 last:border-b-0'
+                          className='w-full text-left px-3 py-2 hover:bg-gray-50 flex items-center gap-3 text-orange-600 border-b border-gray-100 last:border-b-0 text-sm'
                         >
-                          <Plus className='h-4 w-4' />
+                          <Plus className='h-3 w-3' />
                           <span>Create &ldquo;{tagInput}&rdquo;</span>
                         </button>
                       ) : null}

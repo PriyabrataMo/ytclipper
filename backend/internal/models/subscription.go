@@ -135,13 +135,13 @@ var AvailablePlans = map[string]PlanPricing{
 			"Basic tag management",
 		},
 		Limits: map[string]interface{}{
-			"videos":          5,
-			"notes_per_video": 8,
-			"ai_summaries":    true,
-			"custom_tags":     false,
-			"export":          false,
-			"analytics":       false,
-			"api_access":      false,
+			"videos":       5,
+			"notes":        8,
+			"ai_summaries": true,
+			"custom_tags":  false,
+			"export":       false,
+			"analytics":    false,
+			"api_access":   false,
 		},
 	},
 	"monthly": {
@@ -159,13 +159,13 @@ var AvailablePlans = map[string]PlanPricing{
 			"API access",
 		},
 		Limits: map[string]interface{}{
-			"videos":          -1, // unlimited
-			"notes_per_video": -1, // unlimited
-			"ai_summaries":    true,
-			"custom_tags":     true,
-			"export":          true,
-			"analytics":       true,
-			"api_access":      true,
+			"videos":       -1, // unlimited
+			"notes":        -1, // unlimited
+			"ai_summaries": true,
+			"custom_tags":  true,
+			"export":       true,
+			"analytics":    true,
+			"api_access":   true,
 		},
 	},
 	"quarterly": {
@@ -183,13 +183,13 @@ var AvailablePlans = map[string]PlanPricing{
 			"API access",
 		},
 		Limits: map[string]interface{}{
-			"videos":          -1, // unlimited
-			"notes_per_video": -1, // unlimited
-			"ai_summaries":    true,
-			"custom_tags":     true,
-			"export":          true,
-			"analytics":       true,
-			"api_access":      true,
+			"videos":       -1, // unlimited
+			"notes":        -1, // unlimited
+			"ai_summaries": true,
+			"custom_tags":  true,
+			"export":       true,
+			"analytics":    true,
+			"api_access":   true,
 		},
 	},
 	"annual": {
@@ -207,24 +207,24 @@ var AvailablePlans = map[string]PlanPricing{
 			"API access",
 		},
 		Limits: map[string]interface{}{
-			"videos":          -1, // unlimited
-			"notes_per_video": -1, // unlimited
-			"ai_summaries":    true,
-			"custom_tags":     true,
-			"export":          true,
-			"analytics":       true,
-			"api_access":      true,
+			"videos":       -1, // unlimited
+			"notes":        -1, // unlimited
+			"ai_summaries": true,
+			"custom_tags":  true,
+			"export":       true,
+			"analytics":    true,
+			"api_access":   true,
 		},
 	},
 }
 
 // Feature names constants
 const (
-	FeatureVideos        = "videos"
-	FeatureNotesPerVideo = "notes_per_video"
-	FeatureAISummaries   = "ai_summaries"
-	FeatureCustomTags    = "custom_tags"
-	FeatureExport        = "export"
-	FeatureAnalytics     = "analytics"
-	FeatureAPIAccess     = "api_access"
+	FeatureVideos      = "videos"
+	FeatureNotes       = "notes"
+	FeatureAISummaries = "ai_summaries"
+	FeatureCustomTags  = "custom_tags"
+	FeatureExport      = "export"
+	FeatureAnalytics   = "analytics"
+	FeatureAPIAccess   = "api_access"
 )

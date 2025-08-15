@@ -165,7 +165,7 @@ func (f *FeatureAccessService) GetAllFeatureUsage(ctx context.Context, userID uu
 	// Ensure all features have usage records
 	features := []string{
 		models.FeatureVideos,
-		models.FeatureNotesPerVideo,
+		models.FeatureNotes,
 		models.FeatureAISummaries,
 		models.FeatureCustomTags,
 		models.FeatureExport,
@@ -218,7 +218,7 @@ func (f *FeatureAccessService) UpdateFeatureLimits(ctx context.Context, userID u
 	limits := plan.Limits
 	features := []string{
 		models.FeatureVideos,
-		models.FeatureNotesPerVideo,
+		models.FeatureNotes,
 		models.FeatureAISummaries,
 		models.FeatureCustomTags,
 		models.FeatureExport,

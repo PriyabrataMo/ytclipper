@@ -7,7 +7,6 @@ interface MostUsedTagsProps {
 }
 
 export const MostUsedTags = ({ tags }: MostUsedTagsProps) => {
-  console.log('MostUsedTags', tags);
   return (
     <Card className='shadow-sm border-0 bg-white'>
       <CardHeader className='pb-3'>

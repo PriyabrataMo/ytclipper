@@ -17,6 +17,7 @@ import { Helmet } from '@dr.pogodin/react-helmet';
 import { EmailVerificationPage } from './pages/email-verification';
 import { GoogleCallback } from './pages/google-callback';
 import { AuthRoutes } from './routes';
+import icon from './assets/favicon.ico';
 
 const App = () => {
   // useEffect(() => {
@@ -69,7 +70,29 @@ const App = () => {
           name='description'
           content='Your YouTube video timestamping tool'
         />
-        <link rel='icon' href='/favicon.ico' />
+        <link rel='icon' href={icon} />
+
+        {/* Open Graph tags */}
+        <meta property='og:title' content='YTClipper' />
+        <meta
+          property='og:description'
+          content='Your YouTube video timestamping tool'
+        />
+        <meta property='og:image' content={icon} />
+        <meta property='og:url' content='https://app.ytclipper.com/' />
+        <meta property='og:type' content='website' />
+
+        {/* Twitter tags */}
+        <meta name='twitter:card' content={icon} />
+        <meta name='twitter:title' content='YTClipper' />
+        <meta
+          name='twitter:description'
+          content='Your YouTube video timestamping tool'
+        />
+        <meta
+          name='twitter:image'
+          content='https://app.ytclipper.com/favicon.ico'
+        />
       </Helmet>
       <Routes>
         <Route

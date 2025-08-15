@@ -7,6 +7,7 @@ import {
 import { useAppDispatch, useAppSelector } from '@/store/hooks';
 import {
   setCurrentTimestamp,
+  setGotoTimestamp,
   setVideoTitle,
 } from '@/store/slices/timestampSlice';
 import MDEditor from '@uiw/react-md-editor';
@@ -80,6 +81,17 @@ export const VideoPlayer = ({
     setIsPlayerReady(false);
   };
 
+  const gotoTimestamp = useAppSelector(
+    (state) => state.timestamps.gotoTimestamp,
+  );
+
+  useEffect(() => {
+    if (gotoTimestamp !== null && videoRef.current) {
+      videoRef.current.seekTo(gotoTimestamp, true);
+      dispatch(setGotoTimestamp(null)); // reset after seeking
+    }
+  }, [gotoTimestamp, videoRef, dispatch]);
+
   const handleVideoTitle = async (title: string) => {
     dispatch(setVideoTitle(title));
 
@@ -90,7 +102,6 @@ export const VideoPlayer = ({
           youtube_url: `https://youtube.com/watch?v=${videoId}`,
           title,
         }).unwrap();
-        console.log('Video metadata updated successfully');
       } catch (error) {
         console.error('Failed to update video metadata:', error);
       }
@@ -110,7 +121,6 @@ export const VideoPlayer = ({
           thumbnail_url: metadata.thumbnail_url,
           channel_title: metadata.channel_title,
         }).unwrap();
-        console.log('Basic video metadata updated successfully');
       } catch (error) {
         console.error('Failed to update video metadata:', error);
       }

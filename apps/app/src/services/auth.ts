@@ -6,6 +6,7 @@ import {
 import { api } from './api';
 
 import type { AuthMeResponse, UniversalResponse, User } from '@/types';
+import { PURGE } from 'redux-persist';
 
 export interface LoginRequest {
   email: string;
@@ -87,10 +88,11 @@ export const injectedAuthApi = api.injectEndpoints({
       async onQueryStarted(_, { dispatch, queryFulfilled }) {
         try {
           await queryFulfilled;
-          dispatch(logoutAction());
         } catch {
-          // Even if logout fails, we should still clear local state
+          console.error('Logout failed');
+        } finally {
           dispatch(logoutAction());
+          dispatch({ type: PURGE });
         }
       },
     }),

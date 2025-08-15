@@ -1,7 +1,4 @@
-import {
-  useAnswerQuestionMutation,
-  useGenerateSummaryMutation,
-} from '@/services/timestamps';
+import { useAnswerQuestionMutation } from '@/services/timestamps';
 import { useAppSelector } from '@/store/hooks';
 import {
   Badge,
@@ -11,10 +8,10 @@ import {
   CardHeader,
   CardTitle,
   Input,
-  ScrollArea,
+  toast,
 } from '@ytclipper/ui';
-import { Bot, Check, Copy, Loader2, Send, Sparkles, User } from 'lucide-react';
-import { useState } from 'react';
+import { Bot, Check, Copy, Send, Sparkles, User } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 interface Message {
   id: string;
@@ -44,11 +41,12 @@ export const AIChat = ({ videoId, currentTimestamp }: AIChatProps) => {
   const [copied, setCopied] = useState(false);
   const timeStampsSliceData = useAppSelector((state) => state.timestamps);
   const videoTitle = timeStampsSliceData.videoTitle;
+  currentTimestamp = timeStampsSliceData.currentTimestamp;
+  const bottomRef = useRef<HTMLDivElement | null>(null);
+  const [showSuggestions, setShowSuggestions] = useState(false);
 
   const [answerQuestion, { isLoading: isAnswering }] =
     useAnswerQuestionMutation();
-  const [generateSummary, { isLoading: isGeneratingSummary }] =
-    useGenerateSummaryMutation();
 
   const formatTime = (seconds: number) => {
     const minutes = Math.floor(seconds / 60);
@@ -56,7 +54,13 @@ export const AIChat = ({ videoId, currentTimestamp }: AIChatProps) => {
     return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
   };
 
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
   const handleSendMessage = async () => {
+    setShowSuggestions(false);
+
     if (!inputValue.trim()) {
       return;
     }
@@ -89,46 +93,77 @@ export const AIChat = ({ videoId, currentTimestamp }: AIChatProps) => {
         relatedTimestamp: currentTimestamp,
       };
       setMessages((prev) => [...prev, aiResponse]);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Failed to answer question:', error);
+
+      // Check if it's a usage limit exceeded error
+      const errorData = error as {
+        data?: { error?: { code?: string; details?: { feature?: string } } };
+      };
+      let errorMessage =
+        'Sorry, I encountered an error while processing your question. Please try again.';
+
+      if (errorData?.data?.error?.code === 'USAGE_LIMIT_EXCEEDED') {
+        const feature = errorData?.data?.error?.details?.feature;
+
+        if (feature === 'ai_questions') {
+          errorMessage =
+            'You have reached the AI question limit for your current plan. Please upgrade to continue asking questions.';
+          toast.error('AI Question Limit Exceeded', {
+            description: 'Upgrade your plan to continue asking AI questions.',
+            action: {
+              label: 'Upgrade Now',
+              onClick: () => {
+                window.location.href = '/pricing';
+              },
+            },
+          });
+        } else if (feature === 'videos') {
+          errorMessage =
+            'You have reached the video limit for your current plan. Please upgrade to continue using this feature.';
+          toast.error('Video Limit Exceeded', {
+            description: 'Upgrade your plan to continue adding videos.',
+            action: {
+              label: 'Upgrade Now',
+              onClick: () => {
+                window.location.href = '/pricing';
+              },
+            },
+          });
+        } else if (feature === 'notes') {
+          errorMessage =
+            'You have reached the note limit for your current plan. Please upgrade to continue using this feature.';
+          toast.error('Note Limit Exceeded', {
+            description: 'Upgrade your plan to continue adding notes.',
+            action: {
+              label: 'Upgrade Now',
+              onClick: () => {
+                window.location.href = '/pricing';
+              },
+            },
+          });
+        } else if (feature === 'ai_summaries') {
+          errorMessage =
+            'You have reached the AI summary limit for your current plan. Please upgrade to continue using this feature.';
+          toast.error('AI Summary Limit Exceeded', {
+            description:
+              'Upgrade your plan to continue generating AI summaries.',
+            action: {
+              label: 'Upgrade Now',
+              onClick: () => {
+                window.location.href = '/pricing';
+              },
+            },
+          });
+        }
+      }
+
       const errorResponse: Message = {
         id: (Date.now() + 1).toString(),
         type: 'ai',
-        content:
-          'Sorry, I encountered an error while processing your question. Please try again.',
+        content: errorMessage,
         timestamp: new Date(),
         relatedTimestamp: currentTimestamp,
-      };
-      setMessages((prev) => [...prev, errorResponse]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleGenerateSummary = async () => {
-    setIsLoading(true);
-
-    try {
-      const response = await generateSummary({
-        video_id: videoId,
-        type: 'brief',
-      }).unwrap();
-
-      const summaryMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        type: 'ai',
-        content: `**Video Summary:**\n\n${response.data.summary}`,
-        timestamp: new Date(),
-      };
-      setMessages((prev) => [...prev, summaryMessage]);
-    } catch (error) {
-      console.error('Failed to generate summary:', error);
-      const errorResponse: Message = {
-        id: (Date.now() + 1).toString(),
-        type: 'ai',
-        content:
-          'Sorry, I encountered an error while generating the summary. Please try again.',
-        timestamp: new Date(),
       };
       setMessages((prev) => [...prev, errorResponse]);
     } finally {
@@ -146,18 +181,49 @@ export const AIChat = ({ videoId, currentTimestamp }: AIChatProps) => {
     }
   };
 
-  const suggestedQuestions = [
-    'Summarize the main points',
-    'What are the key takeaways?',
-    'Explain this concept in simple terms',
-    'What examples were given?',
-    'How does this relate to...?',
-  ];
+  const handleSuggestionClick = (question: string) => {
+    setInputValue(question);
+  };
+
+  const Suggestions = useMemo(() => {
+    if (!showSuggestions) {
+      return null;
+    }
+
+    const suggestedQuestions = [
+      'Summarize the main points',
+      'What are the key takeaways?',
+      'Explain this concept in simple terms',
+      'What examples were given?',
+      'How does this relate to...?',
+    ];
+
+    return (
+      <div className='mt-2'>
+        <div className='text-xs text-muted-foreground mb-2'>
+          Suggested questions:
+        </div>
+        <div className='flex flex-wrap gap-1'>
+          {suggestedQuestions.map((question) => (
+            <Button
+              key={question}
+              variant='outline'
+              size='sm'
+              className='text-xs h-7'
+              onClick={() => handleSuggestionClick(question)}
+            >
+              {question}
+            </Button>
+          ))}
+        </div>
+      </div>
+    );
+  }, [showSuggestions]);
 
   return (
-    <Card className='h-full flex flex-col'>
-      <CardHeader className='pb-3'>
-        <CardTitle className='flex items-center gap-2 text-lg'>
+    <Card className='h-full flex flex-col pt-4 gap-4'>
+      <CardHeader className=''>
+        <CardTitle className='flex items-center gap-2 text-lg p-0'>
           <Bot className='h-5 w-5 text-accent' />
           AI Assistant
           <Sparkles className='h-4 w-4 text-accent' />
@@ -169,9 +235,9 @@ export const AIChat = ({ videoId, currentTimestamp }: AIChatProps) => {
         ) : null}
       </CardHeader>
 
-      <CardContent className='flex-1 flex flex-col p-0'>
+      <CardContent className='flex-1 flex flex-col p-0 justify-between'>
         {/* Messages */}
-        <ScrollArea className='flex-1 px-4 max-h-[calc(100vh-200px-200px-100px-50px)]'>
+        <div className='flex-1 px-4 max-h-[55vh] overflow-y-auto'>
           <div className='space-y-4 pb-4'>
             {messages.map((message) => (
               <div
@@ -229,6 +295,8 @@ export const AIChat = ({ videoId, currentTimestamp }: AIChatProps) => {
                       </Button>
                     )}
                   </div>
+
+                  <div ref={bottomRef} />
                 </div>
               </div>
             ))}
@@ -254,69 +322,51 @@ export const AIChat = ({ videoId, currentTimestamp }: AIChatProps) => {
               </div>
             ) : null}
           </div>
-        </ScrollArea>
-
-        {/* Quick Actions */}
-        <div className='px-4 py-3 border-t'>
-          <div className='flex gap-2 mb-2'>
-            <Button
-              variant='outline'
-              size='sm'
-              onClick={handleGenerateSummary}
-              disabled={isGeneratingSummary}
-              className='text-xs h-7'
-            >
-              {isGeneratingSummary ? (
-                <Loader2 className='h-3 w-3 mr-1 animate-spin' />
-              ) : (
-                <Sparkles className='h-3 w-3 mr-1' />
-              )}
-              Generate Summary
-            </Button>
-          </div>
-          <div className='text-xs text-muted-foreground mb-2'>
-            Suggested questions:
-          </div>
-          <div className='flex flex-wrap gap-1'>
-            {suggestedQuestions.map((question) => (
-              <Button
-                key={question}
-                variant='outline'
-                size='sm'
-                className='text-xs h-7'
-                onClick={() => setInputValue(question)}
-              >
-                {question}
-              </Button>
-            ))}
-          </div>
         </div>
 
-        {/* Input */}
-        <div className='p-4 border-t'>
-          <div className='flex gap-2'>
-            <Input
-              placeholder={`Ask about the video${currentTimestamp ? ` at ${formatTime(currentTimestamp)}` : ''}...`}
-              value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
-              onKeyPress={(e) =>
-                e.key === 'Enter' && !e.shiftKey && handleSendMessage()
-              }
-              disabled={isLoading || isAnswering}
-            />
-            <Button
-              onClick={handleSendMessage}
-              disabled={!inputValue.trim() || isLoading || isAnswering}
-              size='icon'
-            >
-              <Send className='h-4 w-4' />
-            </Button>
-          </div>
-          {currentTimestamp !== undefined && (
-            <div className='mt-2 text-xs text-muted-foreground'>
-              Current timestamp: {formatTime(currentTimestamp)}
+        {/* Quick Actions */}
+        <div>
+          <div className='px-4 py-3 border-t'>
+            <div className='flex gap-2 mb-2'>
+              <Button
+                variant='ghost'
+                size='sm'
+                onClick={() => setShowSuggestions((prev) => !prev)}
+                className='text-xs h-7'
+              >
+                {showSuggestions ? 'Hide Suggestions' : 'Show Suggestions'}
+              </Button>
             </div>
-          )}
+
+            {Suggestions}
+          </div>
+
+          {/* Input */}
+          <div className='p-4 border-t'>
+            <div className='flex gap-2'>
+              <Input
+                placeholder={`Ask about the video${currentTimestamp ? ` at ${formatTime(currentTimestamp)}` : ''}...`}
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyPress={(e) =>
+                  e.key === 'Enter' && !e.shiftKey && handleSendMessage()
+                }
+                disabled={isLoading || isAnswering}
+              />
+              <Button
+                onClick={handleSendMessage}
+                disabled={!inputValue.trim() || isLoading || isAnswering}
+                size='icon'
+              >
+                <Send className='h-4 w-4' />
+              </Button>
+            </div>
+            {currentTimestamp !== undefined && (
+              <div className='mt-2 text-xs text-muted-foreground'>
+                Current timestamp: {formatTime(currentTimestamp)}
+              </div>
+            )}
+          </div>
         </div>
       </CardContent>
     </Card>

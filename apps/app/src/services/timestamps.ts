@@ -37,7 +37,7 @@ export interface UpdateTimestampRequest {
 export interface GetTimestampsResponse {
   timestamps: Timestamp[];
   video_id: string;
-  user_id: string;
+  count: number;
 }
 
 export interface DeleteTimestampResponse {
@@ -67,22 +67,30 @@ export interface SearchTimestampsRequest {
   limit?: number;
 }
 
+export interface GetVideoSummary {
+  video_id: string;
+  summary: string;
+  cached: boolean;
+  generated_at: string;
+}
+
 export interface SearchTimestampsResponse {
   timestamps: Timestamp[];
   count: number;
 }
 
-export interface GenerateSummaryRequest {
+export interface GenerateFullVideoSummaryRequest {
   video_id: string;
-  type?: 'brief' | 'detailed' | 'key_points';
+  refresh?: boolean;
 }
 
-export interface GenerateSummaryResponse {
+export interface GenerateFullVideoSummaryResponse {
   summary: string;
   video_id: string;
-  type: string;
+  video_title: string;
   note_count: number;
   generated_at: string;
+  cached: boolean;
 }
 
 export interface AnswerQuestionRequest {
@@ -175,16 +183,20 @@ export const injectedTimestampsApi = api.injectEndpoints({
     }),
 
     // AI Features
-    generateSummary: builder.mutation<
-      UniversalResponse<GenerateSummaryResponse>,
-      GenerateSummaryRequest
+    generateFullVideoSummary: builder.mutation<
+      UniversalResponse<GenerateFullVideoSummaryResponse>,
+      GenerateFullVideoSummaryRequest
     >({
       query: (data) => ({
-        url: '/timestamps/summary',
+        url: '/timestamps/full-summary',
         method: 'POST',
         body: JSON.stringify(data),
       }),
     }),
+    getVideoSummary: builder.query<UniversalResponse<GetVideoSummary>, string>({
+      query: (videoId) => `/timestamps/summary/${videoId}`,
+    }),
+
     answerQuestion: builder.mutation<
       UniversalResponse<AnswerQuestionResponse>,
       AnswerQuestionRequest
@@ -208,6 +220,7 @@ export const {
   useGetAllTagsQuery,
   useSearchTagsMutation,
   useSearchTimestampsMutation,
-  useGenerateSummaryMutation,
+  useGenerateFullVideoSummaryMutation,
   useAnswerQuestionMutation,
+  useGetVideoSummaryQuery,
 } = injectedTimestampsApi;

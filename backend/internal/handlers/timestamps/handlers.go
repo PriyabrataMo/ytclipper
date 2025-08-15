@@ -15,21 +15,24 @@ import (
 	"github.com/shubhamku044/ytclipper/internal/handlers/videos"
 	"github.com/shubhamku044/ytclipper/internal/middleware"
 	"github.com/shubhamku044/ytclipper/internal/models"
+	"github.com/shubhamku044/ytclipper/internal/services"
 )
 
 type TimestampsHandlers struct {
-	db            *database.Database
-	aiService     *AIService
-	tagService    *TagService
-	videoHandlers *videos.VideoHandlers
+	db                  *database.Database
+	aiService           *AIService
+	tagService          *TagService
+	videoHandlers       *videos.VideoHandlers
+	featureUsageService *services.FeatureUsageService
 }
 
 func NewTimestampsHandlers(db *database.Database, openaiAPIKey *config.OpenAIConfig) *TimestampsHandlers {
 	return &TimestampsHandlers{
-		db:            db,
-		aiService:     NewAIService(openaiAPIKey, db),
-		tagService:    NewTagService(db),
-		videoHandlers: videos.NewVideoHandlers(db),
+		db:                  db,
+		aiService:           NewAIService(openaiAPIKey, db),
+		tagService:          NewTagService(db),
+		videoHandlers:       videos.NewVideoHandlers(db),
+		featureUsageService: services.NewFeatureUsageService(db),
 	}
 }
 
@@ -49,7 +52,6 @@ func (t *TimestampsHandlers) GetAllTags(c *gin.Context) {
 
 	tags, err := t.tagService.GetAllTags(c.Request.Context(), userID, limit)
 	if err != nil {
-		log.Printf("Error fetching all tags: %v", err)
 		middleware.RespondWithError(c, http.StatusInternalServerError, "FAILED_TO_FETCH_TAGS", "Failed to fetch tags", gin.H{"error": err.Error()})
 		return
 	}
@@ -81,7 +83,6 @@ func (t *TimestampsHandlers) SearchTags(c *gin.Context) {
 
 	tags, err := t.tagService.SearchTags(c.Request.Context(), userID, req.Query, req.Limit)
 	if err != nil {
-		log.Printf("Error searching tags: %v", err)
 		middleware.RespondWithError(c, http.StatusInternalServerError, "FAILED_TO_SEARCH_TAGS", "Failed to search tags", gin.H{"error": err.Error()})
 		return
 	}
@@ -140,11 +141,30 @@ func (t *TimestampsHandlers) CreateTimestamp(c *gin.Context) {
 		placeholderURL := "https://youtube.com/watch?v=" + req.VideoID
 
 		if err := t.videoHandlers.CreateVideoIfNotExists(ctx, userID, req.VideoID, placeholderURL, placeholderTitle); err != nil {
+			if err.Error() == "USAGE_LIMIT_EXCEEDED" {
+				middleware.RespondWithError(c, http.StatusForbidden, "USAGE_LIMIT_EXCEEDED", "Video limit exceeded for your current plan", gin.H{"feature": "videos"})
+				return
+			}
 			middleware.RespondWithError(c, http.StatusInternalServerError, "VIDEO_ERROR", "Failed to create video", gin.H{
 				"error": err.Error(),
 			})
 			return
 		}
+	}
+
+	// Check note usage limit before creating timestamp
+	canAdd, err := t.featureUsageService.CheckUsageLimit(ctx, userID, "notes")
+	if err != nil {
+		middleware.RespondWithError(c, http.StatusInternalServerError, "USAGE_CHECK_ERROR", "Failed to check usage limit", gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+	if !canAdd {
+		middleware.RespondWithError(c, http.StatusForbidden, "USAGE_LIMIT_EXCEEDED", "Note limit exceeded for your current plan", gin.H{
+			"feature": "notes",
+		})
+		return
 	}
 
 	timestamp := models.Timestamp{
@@ -186,6 +206,13 @@ func (t *TimestampsHandlers) CreateTimestamp(c *gin.Context) {
 			"error": err.Error(),
 		})
 		return
+	}
+
+	// Increment usage after successful timestamp creation
+	err = t.featureUsageService.IncrementUsage(ctx, userID, "notes")
+	if err != nil {
+		// Log error but don't fail the timestamp creation
+		log.Printf("Warning: Failed to increment note usage: %v", err)
 	}
 
 	if t.aiService != nil {
