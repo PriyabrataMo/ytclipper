@@ -54,7 +54,7 @@ const parseFiltersFromSearchParams = (
 };
 
 const updateSearchParamsFromFilters = (
-  searchParams: URLSearchParams,
+  _: URLSearchParams,
   filters: VideoFilters,
 ) => {
   const newSearchParams = new URLSearchParams();
@@ -80,14 +80,12 @@ export const VideosPage = () => {
   const [videoUrl, setVideoUrl] = useState('');
   const [isAddingVideo, setIsAddingVideo] = useState(false);
 
-  // Initialize filters from URL search params
   const [filters, setFilters] = useState<VideoFilters>(() => {
     return parseFiltersFromSearchParams(searchParams);
   });
 
   const [useFilteredQuery, setUseFilteredQuery] = useState(false);
 
-  // API queries
   const {
     data: allVideosData,
     isLoading: isLoadingAll,
@@ -99,29 +97,24 @@ export const VideosPage = () => {
     refetch: refetchFiltered,
   } = useGetUserVideosQuery(filters, { skip: !useFilteredQuery });
 
-  // Mutations
   const [softDeleteVideo] = useSoftDeleteVideoMutation();
   const [hardDeleteVideo] = useHardDeleteVideoMutation();
   const [restoreVideo] = useRestoreVideoMutation();
 
-  // State for modals
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [videoToDelete, setVideoToDelete] = useState<string | null>(null);
   const [deleteType, setDeleteType] = useState<'soft' | 'hard'>('soft');
 
-  // Get videos from Redux store or API
   const allVideos = allVideosData?.data?.videos || [];
   const filteredVideos = filteredVideosData?.data?.videos || [];
 
   const videos = useFilteredQuery ? filteredVideos : allVideos;
   const isLoading = useFilteredQuery ? isLoadingFiltered : isLoadingAll;
 
-  // Calculate video counts
   const activeVideos = allVideos.filter((v) => !v.deleted_at).length;
   const deletedVideos = allVideos.filter((v) => v.deleted_at).length;
   const totalVideos = allVideos.length;
 
-  // Check if filters are active
   const hasActiveFilters = Object.entries(filters).some(([key, value]) => {
     if (key === 'search') {
       return value !== '';
@@ -135,12 +128,10 @@ export const VideosPage = () => {
     return value !== 'all';
   });
 
-  // Switch to filtered query when filters are active
   useEffect(() => {
     setUseFilteredQuery(hasActiveFilters);
   }, [hasActiveFilters]);
 
-  // Update filters when URL search params change (e.g., browser back/forward)
   useEffect(() => {
     const newFilters = parseFiltersFromSearchParams(searchParams);
     setFilters(newFilters);
@@ -228,7 +219,6 @@ export const VideosPage = () => {
 
   const handleFiltersChange = (newFilters: VideoFilters) => {
     setFilters(newFilters);
-    // Update URL search params
     const newSearchParams = updateSearchParamsFromFilters(
       new URLSearchParams(searchParams),
       newFilters,
@@ -238,7 +228,6 @@ export const VideosPage = () => {
 
   const handleClearFilters = () => {
     setFilters(defaultFilters);
-    // Clear URL search params
     setSearchParams(new URLSearchParams(), { replace: true });
   };
 
@@ -250,7 +239,6 @@ export const VideosPage = () => {
     }
   };
 
-  // Use videos directly since filtering is now done on backend
   const filteredVideosForDisplay = videos;
 
   return (
@@ -275,7 +263,6 @@ export const VideosPage = () => {
           </div>
         </div>
 
-        {/* Filters Component */}
         <div className='mb-4'>
           <VideoFiltersComponent
             filters={filters}
@@ -286,7 +273,6 @@ export const VideosPage = () => {
           />
         </div>
 
-        {/* Compact Add Video Section */}
         {!isLoading && (
           <div className='mb-6'>
             <div className='flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200'>
@@ -312,35 +298,28 @@ export const VideosPage = () => {
           </div>
         )}
 
-        {/* Loading State */}
         {isLoading ? (
           <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6'>
             {Array.from({ length: 8 }, () => uuidv4()).map((id) => (
               <Card key={id} className='overflow-hidden animate-pulse'>
-                {/* Thumbnail skeleton */}
                 <div className='relative w-full h-40 bg-gray-200'>
                   <div className='absolute inset-0 flex items-center justify-center'>
                     <div className='w-12 h-12 bg-gray-300 rounded-full' />
                   </div>
-                  {/* Progress bar skeleton */}
                   <div className='absolute bottom-0 left-0 right-0 h-1 bg-gray-300'>
                     <div className='h-full bg-gray-400 w-1/3' />
                   </div>
-                  {/* Note count skeleton */}
                   <div className='absolute top-2 right-2 bg-gray-300 rounded px-2 py-1'>
                     <div className='w-12 h-3 bg-gray-400 rounded' />
                   </div>
                 </div>
 
-                {/* Content skeleton */}
                 <div className='p-4 space-y-3'>
-                  {/* Title skeleton */}
                   <div className='space-y-2'>
                     <div className='h-4 bg-gray-200 rounded w-full' />
                     <div className='h-4 bg-gray-200 rounded w-3/4' />
                   </div>
 
-                  {/* Metadata skeleton */}
                   <div className='space-y-2 pt-2'>
                     <div className='flex items-center justify-between'>
                       <div className='flex items-center space-x-2'>
@@ -370,7 +349,6 @@ export const VideosPage = () => {
           </div>
         ) : null}
 
-        {/* Empty State */}
         {videos.length === 0 && !isLoading ? (
           <div className='text-center py-16'>
             <div className='max-w-sm mx-auto'>
@@ -415,7 +393,6 @@ export const VideosPage = () => {
           </div>
         ) : null}
 
-        {/* Videos Grid */}
         {!isLoading && filteredVideosForDisplay.length > 0 && (
           <div className='grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6'>
             {filteredVideosForDisplay.map((video) => (
@@ -431,7 +408,6 @@ export const VideosPage = () => {
           </div>
         )}
 
-        {/* No Results State */}
         {!isLoading &&
           videos.length > 0 &&
           filteredVideosForDisplay.length === 0 && (
@@ -454,7 +430,6 @@ export const VideosPage = () => {
           )}
       </div>
 
-      {/* Delete Confirmation Modal */}
       <Dialog open={deleteModalOpen} onOpenChange={setDeleteModalOpen}>
         <DialogContent>
           <DialogHeader>
