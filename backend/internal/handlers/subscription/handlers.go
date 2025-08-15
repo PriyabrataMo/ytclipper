@@ -97,6 +97,7 @@ func (h *SubscriptionHandlers) GetUserProfile(c *gin.Context) {
 	usageMap := make(map[string]models.FeatureUsage)
 
 	for _, usage := range featureUsage {
+		fmt.Printf("Feature: %s, Current Usage: %d, Usage Limit: %d\n", usage.FeatureName, usage.CurrentUsage, usage.UsageLimit)
 		usageMap[usage.FeatureName] = usage
 	}
 

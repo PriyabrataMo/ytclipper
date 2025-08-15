@@ -15,6 +15,7 @@ import (
 	"github.com/shubhamku044/ytclipper/internal/middleware"
 	"github.com/shubhamku044/ytclipper/internal/models"
 	"github.com/shubhamku044/ytclipper/internal/services"
+	"github.com/uptrace/bun"
 )
 
 type VideoHandlers struct {
@@ -46,12 +47,78 @@ func (v *VideoHandlers) GetAllVideos(c *gin.Context) {
 
 	ctx := context.Background()
 
+	search := c.Query("search")
+	status := c.Query("status")
+	sortBy := c.Query("sortBy")
+	sortOrder := c.Query("sortOrder")
+	durationRange := c.Query("durationRange")
+	progressRange := c.Query("progressRange")
+
+	if sortBy == "" {
+		sortBy = "created_at"
+	}
+	if sortOrder == "" {
+		sortOrder = "desc"
+	}
+	if status == "" {
+		status = "active"
+	}
+
 	var videos []models.Video
-	err = v.db.DB.NewSelect().
-		Model(&videos).
-		Where("user_id = ? AND deleted_at IS NULL", userID).
-		Order("created_at DESC").
-		Scan(ctx)
+	var query *bun.SelectQuery
+
+	baseQuery := v.db.DB.NewSelect().
+		TableExpr("videos AS v").
+		Column("v.*").
+		Where("v.user_id = ?", userID)
+
+	switch status {
+	case "active":
+		baseQuery = baseQuery.Where("v.deleted_at IS NULL")
+	case "deleted":
+		baseQuery = baseQuery.Where("v.deleted_at IS NOT NULL")
+	default:
+		baseQuery = baseQuery.Where("v.deleted_at IS NULL")
+	}
+
+	query = baseQuery
+
+	if search != "" {
+		query = query.Where("v.title ILIKE ? OR v.channel_title ILIKE ?", "%"+search+"%", "%"+search+"%")
+	}
+
+	if durationRange != "" && durationRange != "all" {
+		switch durationRange {
+		case "short":
+			query = query.Where("v.duration < ?", 300)
+		case "medium":
+			query = query.Where("v.duration >= ? AND v.duration <= ?", 300, 1200)
+		case "long":
+			query = query.Where("v.duration > ?", 1200)
+		}
+	}
+
+	var orderClause string
+	switch sortBy {
+	case "title":
+		orderClause = "v.title"
+	case "duration":
+		orderClause = "v.duration"
+	case "watched_duration":
+		orderClause = "v.watched_duration"
+	default:
+		orderClause = "v.created_at"
+	}
+
+	if sortOrder == "asc" {
+		orderClause += " ASC"
+	} else {
+		orderClause += " DESC"
+	}
+
+	query = query.Order(orderClause)
+
+	err = query.Scan(ctx, &videos)
 
 	if err != nil {
 		middleware.RespondWithError(c, http.StatusInternalServerError, "DB_READ_ERROR", "Failed to fetch videos", gin.H{
@@ -86,6 +153,28 @@ func (v *VideoHandlers) GetAllVideos(c *gin.Context) {
 			latestTimestampStr = &isoString
 		}
 
+		var progressPercentage float64
+		if video.Duration > 0 {
+			progressPercentage = float64(video.WatchedDuration) / float64(video.Duration) * 100
+		}
+
+		if progressRange != "" && progressRange != "all" {
+			switch progressRange {
+			case "not_started":
+				if progressPercentage > 0 {
+					continue
+				}
+			case "in_progress":
+				if progressPercentage <= 0 || progressPercentage >= 100 {
+					continue
+				}
+			case "completed":
+				if progressPercentage < 100 {
+					continue
+				}
+			}
+		}
+
 		videoMap[video.VideoID] = gin.H{
 			"video_id":         video.VideoID,
 			"youtube_url":      video.YouTubeURL,
@@ -103,12 +192,25 @@ func (v *VideoHandlers) GetAllVideos(c *gin.Context) {
 			"count":            count,
 			"latest_timestamp": latestTimestampStr,
 			"created_at":       video.CreatedAt,
+			"deleted_at":       video.DeletedAt,
 		}
 	}
 
 	var result []gin.H
 	for _, video := range videoMap {
 		result = append(result, video)
+	}
+
+	if sortBy == "count" {
+		for i := 0; i < len(result)-1; i++ {
+			for j := i + 1; j < len(result); j++ {
+				count1 := result[i]["count"].(int)
+				count2 := result[j]["count"].(int)
+				if (sortOrder == "asc" && count1 > count2) || (sortOrder == "desc" && count1 < count2) {
+					result[i], result[j] = result[j], result[i]
+				}
+			}
+		}
 	}
 
 	middleware.RespondWithOK(c, gin.H{
@@ -194,7 +296,22 @@ func (v *VideoHandlers) DeleteVideo(c *gin.Context) {
 
 	ctx := context.Background()
 
-	_, err = v.db.DB.NewUpdate().
+	tx, err := v.db.DB.BeginTx(ctx, nil)
+	if err != nil {
+		middleware.RespondWithError(c, http.StatusInternalServerError, "DB_TRANSACTION_ERROR", "Failed to start transaction", gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+	commited := false
+
+	defer func() {
+		if !commited {
+			_ = tx.Rollback()
+		}
+	}()
+
+	_, err = tx.NewUpdate().
 		Model((*models.Video)(nil)).
 		Set("deleted_at = NOW()").
 		Where("user_id = ? AND video_id = ? AND deleted_at IS NULL", userID, videoID).
@@ -207,7 +324,7 @@ func (v *VideoHandlers) DeleteVideo(c *gin.Context) {
 		return
 	}
 
-	_, err = v.db.DB.NewUpdate().
+	_, err = tx.NewUpdate().
 		Model((*models.Timestamp)(nil)).
 		Set("deleted_at = NOW()").
 		Where("user_id = ? AND video_id = ? AND deleted_at IS NULL", userID, videoID).
@@ -220,8 +337,216 @@ func (v *VideoHandlers) DeleteVideo(c *gin.Context) {
 		return
 	}
 
+	_, err = tx.NewUpdate().
+		Model((*models.TranscriptEmbedding)(nil)).
+		Set("deleted_at = NOW()").
+		Where("user_id = ? AND video_id = ? AND deleted_at IS NULL", userID, videoID).
+		Exec(ctx)
+
+	if err != nil {
+		middleware.RespondWithError(c, http.StatusInternalServerError, "DB_ERROR", "Failed to delete video transcript embeddings", gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		middleware.RespondWithError(c, http.StatusInternalServerError, "DB_COMMIT_ERROR", "Failed to commit transaction", gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+	commited = true
+
 	middleware.RespondWithOK(c, gin.H{
 		"message": "Video and all associated timestamps deleted successfully",
+	})
+}
+func (v *VideoHandlers) HardDeleteVideo(c *gin.Context) {
+	userIDStr, exists := authhandlers.GetUserID(c)
+	if !exists {
+		middleware.RespondWithError(c, http.StatusUnauthorized, "NO_USER_ID", "User ID not found", nil)
+		return
+	}
+
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		middleware.RespondWithError(c, http.StatusBadRequest, "INVALID_USER_ID", "Invalid user ID format", gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	videoID := c.Param("id")
+	if videoID == "" {
+		middleware.RespondWithError(c, http.StatusBadRequest, "MISSING_VIDEO_ID", "Video ID is required", nil)
+		return
+	}
+
+	ctx := context.Background()
+	tx, err := v.db.DB.BeginTx(ctx, nil)
+	if err != nil {
+		middleware.RespondWithError(c, http.StatusInternalServerError, "DB_TRANSACTION_ERROR", "Failed to start transaction", gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+	commited := false
+	defer func() {
+		if !commited {
+			_ = tx.Rollback()
+		}
+	}()
+
+	_, err = tx.NewDelete().
+		Model((*models.Video)(nil)).
+		Where("user_id = ? AND video_id = ?", userID, videoID).
+		ForceDelete().
+		Exec(ctx)
+	if err != nil {
+		middleware.RespondWithError(c, http.StatusInternalServerError, "DB_ERROR", "Failed to hard delete video", gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	_, err = tx.NewDelete().
+		Model((*models.Timestamp)(nil)).
+		Where("user_id = ? AND video_id = ?", userID, videoID).
+		ForceDelete().
+		Exec(ctx)
+	if err != nil {
+		middleware.RespondWithError(c, http.StatusInternalServerError, "DB_ERROR", "Failed to hard delete timestamps", gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	_, err = tx.NewDelete().
+		Model((*models.TranscriptEmbedding)(nil)).
+		Where("user_id = ? AND video_id = ?", userID, videoID).
+		ForceDelete().
+		Exec(ctx)
+	if err != nil {
+		middleware.RespondWithError(c, http.StatusInternalServerError, "DB_ERROR", "Failed to hard delete transcript embeddings", gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		middleware.RespondWithError(c, http.StatusInternalServerError, "DB_COMMIT_ERROR", "Failed to commit transaction", gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+	commited = true
+
+	middleware.RespondWithOK(c, gin.H{
+		"message": "Video and all associated data permanently deleted",
+	})
+}
+
+func (v *VideoHandlers) RestoreVideo(c *gin.Context) {
+	userIDStr, exists := authhandlers.GetUserID(c)
+	if !exists {
+		middleware.RespondWithError(c, http.StatusUnauthorized, "NO_USER_ID", "User ID not found", nil)
+		return
+	}
+
+	userID, err := uuid.Parse(userIDStr)
+	if err != nil {
+		middleware.RespondWithError(c, http.StatusBadRequest, "INVALID_USER_ID", "Invalid user ID format", gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	videoID := c.Param("id")
+	if videoID == "" {
+		middleware.RespondWithError(c, http.StatusBadRequest, "MISSING_VIDEO_ID", "Video ID is required", nil)
+		return
+	}
+
+	ctx := context.Background()
+	tx, err := v.db.DB.BeginTx(ctx, nil)
+	if err != nil {
+		middleware.RespondWithError(c, http.StatusInternalServerError, "DB_TRANSACTION_ERROR", "Failed to start transaction", gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+	commited := false
+	defer func() {
+		if !commited {
+			_ = tx.Rollback()
+		}
+	}()
+
+	var video models.Video
+	err = tx.NewSelect().
+		Table("videos").
+		Where("user_id = ? AND video_id = ?", userID, videoID).
+		Scan(ctx, &video)
+
+	if err != nil {
+		middleware.RespondWithError(c, http.StatusNotFound, "VIDEO_NOT_FOUND", "Video not found", gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	if video.DeletedAt == nil {
+		middleware.RespondWithError(c, http.StatusBadRequest, "VIDEO_NOT_DELETED", "Video is not deleted", nil)
+		return
+	}
+
+	_, err = tx.NewUpdate().
+		Table("videos").
+		Set("deleted_at = ?", nil).
+		Where("user_id = ? AND video_id = ? AND deleted_at IS NOT NULL", userID, videoID).
+		Exec(ctx)
+	if err != nil {
+		middleware.RespondWithError(c, http.StatusInternalServerError, "DB_ERROR", "Failed to restore video", gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	_, err = tx.NewUpdate().
+		Table("timestamps").
+		Set("deleted_at = ?", nil).
+		Where("user_id = ? AND video_id = ? AND deleted_at IS NOT NULL", userID, videoID).
+		Exec(ctx)
+	if err != nil {
+		middleware.RespondWithError(c, http.StatusInternalServerError, "DB_ERROR", "Failed to restore video timestamps", gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	_, err = tx.NewUpdate().
+		Table("transcript_embeddings").
+		Set("deleted_at = ?", nil).
+		Where("user_id = ? AND video_id = ? AND deleted_at IS NOT NULL", userID, videoID).
+		Exec(ctx)
+	if err != nil {
+		middleware.RespondWithError(c, http.StatusInternalServerError, "DB_ERROR", "Failed to restore transcript embeddings", gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		middleware.RespondWithError(c, http.StatusInternalServerError, "DB_COMMIT_ERROR", "Failed to commit transaction", gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+	commited = true
+
+	middleware.RespondWithOK(c, gin.H{
+		"message": "Video and all associated data restored successfully",
 	})
 }
 
@@ -331,13 +656,12 @@ func (v *VideoHandlers) CreateVideoIfNotExists(ctx context.Context, userID uuid.
 	}
 
 	if !exists {
-		// Check usage limit before creating video
 		canAdd, err := v.featureUsageService.CheckUsageLimit(ctx, userID, "videos")
 		if err != nil {
 			return err
 		}
 		if !canAdd {
-			return fmt.Errorf("video limit exceeded for your current plan")
+			return fmt.Errorf("USAGE_LIMIT_EXCEEDED")
 		}
 
 		video := &models.Video{
@@ -357,7 +681,6 @@ func (v *VideoHandlers) CreateVideoIfNotExists(ctx context.Context, userID uuid.
 
 		err = v.featureUsageService.IncrementUsage(ctx, userID, "videos")
 		if err != nil {
-			// Log error but don't fail the video creation
 			log.Printf("Warning: Failed to increment video usage: %v", err)
 		}
 
@@ -456,7 +779,6 @@ func (v *VideoHandlers) UpdateVideoMetadataHandler(c *gin.Context) {
 			Title:      req.Title,
 		}
 
-		// Set optional fields if provided
 		if req.Duration != nil {
 			video.Duration = *req.Duration
 		}
@@ -478,7 +800,6 @@ func (v *VideoHandlers) UpdateVideoMetadataHandler(c *gin.Context) {
 			return
 		}
 
-		// Increment usage after successful video creation
 		err = v.featureUsageService.IncrementUsage(ctx, userID, "videos")
 		if err != nil {
 			log.Printf("Warning: Failed to increment video usage: %v", err)
@@ -498,7 +819,6 @@ func (v *VideoHandlers) UpdateVideoMetadataHandler(c *gin.Context) {
 		Set("updated_at = NOW()").
 		Where("user_id = ? AND video_id = ? AND deleted_at IS NULL", userID, req.VideoID)
 
-	// Add optional fields to update
 	if req.Duration != nil {
 		updateQuery = updateQuery.Set("duration = ?", *req.Duration)
 	}
@@ -540,7 +860,6 @@ func (v *VideoHandlers) GetOrCreateVideoByYouTubeURL(ctx context.Context, userID
 		return video, nil
 	}
 
-	// Check usage limit before creating video
 	canAdd, err := v.featureUsageService.CheckUsageLimit(ctx, userID, "videos")
 	if err != nil {
 		return nil, err
@@ -615,7 +934,6 @@ func (v *VideoHandlers) UpdateWatchedDurationHandler(c *gin.Context) {
 
 	if err != nil {
 		if err.Error() == "no rows in result set" {
-			// Check usage limit before creating video
 			canAdd, err := v.featureUsageService.CheckUsageLimit(ctx, userID, "videos")
 			if err != nil {
 				middleware.RespondWithError(c, http.StatusInternalServerError, "USAGE_CHECK_ERROR", "Failed to check usage limit", gin.H{

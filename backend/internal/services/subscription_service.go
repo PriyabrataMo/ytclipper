@@ -191,13 +191,13 @@ func (s *SubscriptionService) GetUserSubscriptionFeatures(ctx context.Context, u
 			"plan_type": "free",
 			"features":  plan.Features,
 			"limits": map[string]interface{}{
-				"videos":          5,
-				"notes_per_video": 8,
-				"ai_summaries":    true,
-				"custom_tags":     false,
-				"export":          false,
-				"analytics":       false,
-				"api_access":      false,
+				"videos":       5,
+				"notes":        40,
+				"ai_summaries": true,
+				"custom_tags":  false,
+				"export":       false,
+				"analytics":    false,
+				"api_access":   false,
 			},
 		}, nil
 	}
@@ -221,33 +221,33 @@ func (s *SubscriptionService) getPlanLimits(planType string) map[string]interfac
 	switch planType {
 	case "free":
 		return map[string]interface{}{
-			"videos":          5,
-			"notes_per_video": 8,
-			"ai_summaries":    true,
-			"custom_tags":     false,
-			"export":          false,
-			"analytics":       false,
-			"api_access":      false,
+			"videos":       5,
+			"notes":        40,
+			"ai_summaries": true,
+			"custom_tags":  false,
+			"export":       false,
+			"analytics":    false,
+			"api_access":   false,
 		}
 	case "monthly", "quarterly", "annual":
 		return map[string]interface{}{
-			"videos":          -1, // unlimited
-			"notes_per_video": -1, // unlimited
-			"ai_summaries":    true,
-			"custom_tags":     true,
-			"export":          true,
-			"analytics":       true,
-			"api_access":      true,
+			"videos":       -1, // unlimited
+			"notes":        -1, // unlimited
+			"ai_summaries": true,
+			"custom_tags":  true,
+			"export":       true,
+			"analytics":    true,
+			"api_access":   true,
 		}
 	default:
 		return map[string]interface{}{
-			"videos":          0,
-			"notes_per_video": 0,
-			"ai_summaries":    false,
-			"custom_tags":     false,
-			"export":          false,
-			"analytics":       false,
-			"api_access":      false,
+			"videos":       0,
+			"notes":        0,
+			"ai_summaries": false,
+			"custom_tags":  false,
+			"export":       false,
+			"analytics":    false,
+			"api_access":   false,
 		}
 	}
 }

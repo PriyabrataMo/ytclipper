@@ -595,6 +595,8 @@ function UsageProgress({
 }: UsageProgressProps) {
   const isExceeded = !isUnlimited && current >= limit;
 
+  console.log('Label', label, current, limit, percentage, isUnlimited);
+
   return (
     <div className='space-y-2'>
       <div className='flex items-center justify-between text-sm'>

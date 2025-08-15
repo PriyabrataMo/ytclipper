@@ -141,6 +141,10 @@ func (t *TimestampsHandlers) CreateTimestamp(c *gin.Context) {
 		placeholderURL := "https://youtube.com/watch?v=" + req.VideoID
 
 		if err := t.videoHandlers.CreateVideoIfNotExists(ctx, userID, req.VideoID, placeholderURL, placeholderTitle); err != nil {
+			if err.Error() == "USAGE_LIMIT_EXCEEDED" {
+				middleware.RespondWithError(c, http.StatusForbidden, "USAGE_LIMIT_EXCEEDED", "Video limit exceeded for your current plan", gin.H{"feature": "videos"})
+				return
+			}
 			middleware.RespondWithError(c, http.StatusInternalServerError, "VIDEO_ERROR", "Failed to create video", gin.H{
 				"error": err.Error(),
 			})
