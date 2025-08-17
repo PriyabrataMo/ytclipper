@@ -193,13 +193,13 @@ const Features = () => {
         </div>
 
         {/* Statistics Section */}
-        <div className='bg-white rounded-3xl p-6 lg:p-12 border border-gray-100 shadow-lg'>
+        {/* <div className='bg-white rounded-3xl p-6 lg:p-12 border border-gray-100 shadow-lg'>
           <div className='grid grid-cols-2 lg:grid-cols-4 gap-8'>
             {stats.map((stat) => (
               <StatsCard key={stat.label} stat={stat} />
             ))}
           </div>
-        </div>
+        </div> */}
 
         {/* Call to Action Section */}
         <div className='text-center mt-20'>

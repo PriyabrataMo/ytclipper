@@ -11,12 +11,12 @@ const Hero = () => {
       {/* Left Content */}
       <div className='lg:flex-[0.5] flex flex-col items-start md:items-center lg:items-start justify-center h-full space-y-8'>
         {/* Badge */}
-        <div className='inline-flex items-center  gap-2 px-4 py-2 bg-orange-50 border border-orange-200 rounded-full'>
+        {/* <div className='inline-flex items-center  gap-2 px-4 py-2 bg-orange-50 border border-orange-200 rounded-full'>
           <Star className='w-4 h-4 text-orange-600 fill-current' />
           <span className='text-sm font-medium text-orange-700'>
             Trusted by 10,000+ creators
           </span>
-        </div>
+        </div> */}
 
         {/* Main Heading */}
         <div className='space-y-6'>
@@ -60,7 +60,7 @@ const Hero = () => {
         </div>
 
         {/* Social Proof */}
-        <div className='flex flex-col sm:flex-row items-start sm:items-center gap-6 pt-4'>
+        {/* <div className='flex flex-col sm:flex-row items-start sm:items-center gap-6 pt-4'>
           <div className='flex items-center gap-2'>
             <div className='flex -space-x-2'>
               {[1, 2, 3, 4].map((i) => (
@@ -90,7 +90,7 @@ const Hero = () => {
             <CheckCircle className='w-4 h-4 text-green-500' />
             <span>No credit card required</span>
           </div>
-        </div>
+        </div> */}
       </div>
 
       {/* Right Content - Image */}
