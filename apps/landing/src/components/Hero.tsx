@@ -1,22 +1,22 @@
-import { ArrowRight, CheckCircle, Play, Star } from 'lucide-react';
-// import Image from 'next/image';
+import { ArrowRight, Play } from 'lucide-react';
+import Image from 'next/image';
 import Link from 'next/link';
 
 const Hero = () => {
   return (
     <div
       id='hero'
-      className='min-h-screen lg:min-h-0 lg:h-screen flex flex-col lg:flex-row  items-start md:items-center justify-center gap-16 lg:gap-8 mt-[80px] pt-[120px] lg:pt-[0px] lg:overflow-hidden px-6 lg:px-12'
+      className='min-h-screen lg:min-h-0 md:min-h-fit flex flex-col lg:flex-row  items-start md:items-center justify-center gap-16 lg:gap-8 mt-[80px] py-20 lg:overflow-hidden px-6 lg:px-12'
     >
       {/* Left Content */}
       <div className='lg:flex-[0.5] flex flex-col items-start md:items-center lg:items-start justify-center h-full space-y-8'>
         {/* Badge */}
-        <div className='inline-flex items-center  gap-2 px-4 py-2 bg-orange-50 border border-orange-200 rounded-full'>
+        {/* <div className='inline-flex items-center  gap-2 px-4 py-2 bg-orange-50 border border-orange-200 rounded-full'>
           <Star className='w-4 h-4 text-orange-600 fill-current' />
           <span className='text-sm font-medium text-orange-700'>
             Trusted by 10,000+ creators
           </span>
-        </div>
+        </div> */}
 
         {/* Main Heading */}
         <div className='space-y-6'>
@@ -60,7 +60,7 @@ const Hero = () => {
         </div>
 
         {/* Social Proof */}
-        <div className='flex flex-col sm:flex-row items-start sm:items-center gap-6 pt-4'>
+        {/* <div className='flex flex-col sm:flex-row items-start sm:items-center gap-6 pt-4'>
           <div className='flex items-center gap-2'>
             <div className='flex -space-x-2'>
               {[1, 2, 3, 4].map((i) => (
@@ -90,7 +90,7 @@ const Hero = () => {
             <CheckCircle className='w-4 h-4 text-green-500' />
             <span>No credit card required</span>
           </div>
-        </div>
+        </div> */}
       </div>
 
       {/* Right Content - Image */}
@@ -101,10 +101,13 @@ const Hero = () => {
 
           {/* Main image container */}
           <div className='relative lg:top-9 lg:left-10 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden'>
-            <img
+            <Image
               src='/dashboard.png'
               alt='YT Clipper Dashboard Preview'
+              width={900} // set an appropriate width
+              height={500} // set an appropriate height
               className='w-full h-auto object-cover lg:scale-125'
+              priority
             />
 
             {/* Floating elements */}

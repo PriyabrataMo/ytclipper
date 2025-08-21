@@ -42,7 +42,7 @@ const Contact = () => {
     {
       icon: Mail,
       title: 'Email Us',
-      details: 'hello@ytclipper.com',
+      details: 'ytclipper.com@gmail.com',
       description: "We'll respond within 24 hours",
     },
   ];
