@@ -40,7 +40,7 @@ const Footer = () => {
     },
     {
       name: 'Email',
-      href: 'mailto:hello@ytclipper.com',
+      href: 'mailto:ytclipper.com@gmail.com',
       icon: Mail,
       color: 'hover:bg-orange-600',
     },

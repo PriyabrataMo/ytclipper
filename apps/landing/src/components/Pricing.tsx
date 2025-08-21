@@ -2,79 +2,85 @@ import { Check, Star, Zap } from 'lucide-react';
 import { useState } from 'react';
 
 const Pricing = () => {
-  const [selectedPlan, setSelectedPlan] = useState('12');
+  const [selectedPlan, setSelectedPlan] = useState('3');
 
   const plans = [
     {
-      id: '1',
-      name: '1 Month',
-      price: 9.99,
-      originalPrice: 12.99,
-      savings: '23%',
+      id: 'Free',
+      title: 'Free',
+      name: 'Free',
+      description: 'Perfect for getting started with video note-taking',
+      price: 0,
+      originalPrice: 0,
+      // savings: '',
       popular: false,
       features: [
-        'Full access to all features',
-        'Unlimited video processing',
-        'AI-powered insights',
-        'Advanced note-taking tools',
-        'Cloud synchronization',
-        'Priority support',
+        'Up to 5 videos',
+        '40 notes total',
+        '3 AI summaries',
+        '10 AI questions',
+        'Standard support',
+        'Basic tag management',
+      ],
+    },
+    {
+      id: '1',
+      title: '1 Month',
+      name: 'Monthly Pro',
+      description: 'Flexible monthly billing',
+      price: 9.99,
+      originalPrice: 9.99,
+      // savings: '',
+      popular: false,
+      features: [
+        '50 videos',
+        '200 notes total',
+        '50 AI summaries',
+        '200 AI questions',
+        'Custom tags & categories',
         'Export to multiple formats',
-        'Collaborative features',
+        'Advanced analytics',
+        'API access',
       ],
     },
     {
       id: '3',
-      name: '3 Months',
-      price: 24.99,
-      originalPrice: 38.97,
-      savings: '36%',
-      popular: false,
-      features: [
-        'Full access to all features',
-        'Unlimited video processing',
-        'AI-powered insights',
-        'Advanced note-taking tools',
-        'Cloud synchronization',
-        'Priority support',
-        'Export to multiple formats',
-        'Collaborative features',
-      ],
-    },
-    {
-      id: '6',
-      name: '6 Months',
-      price: 44.99,
-      originalPrice: 77.94,
-      savings: '42%',
+      title: '3 Months',
+      name: 'Quarterly Pro',
+      description: 'Save 10% with 3-month billing',
+      price: 26.97,
+      originalPrice: 29.97,
+      savings: '10%',
       popular: true,
       features: [
-        'Full access to all features',
-        'Unlimited video processing',
-        'AI-powered insights',
-        'Advanced note-taking tools',
-        'Cloud synchronization',
-        'Priority support',
+        '150 videos',
+        '600 notes total',
+        '150 AI summaries',
+        '600 AI questions',
+        'Custom tags & categories',
         'Export to multiple formats',
-        'Collaborative features',
+        'Advanced analytics',
+        'API access',
       ],
     },
     {
       id: '12',
-      name: '12 Months',
-      price: 79.99,
-      originalPrice: 155.88,
-      savings: '49%',
+      title: '12 Months',
+      name: 'Annual Pro',
+      description: 'Save 30% with yearly billing',
+      price: 83.88,
+      originalPrice: 119.88,
+      savings: '30%',
       popular: false,
       features: [
-        'Full access to all features',
-        'Unlimited video processing',
-        'AI-powered insights',
-        'Advanced note-taking tools',
-        'Cloud synchronization',
-        'Priority support',
+        '500 videos',
+        '2000 notes total',
+        '500 AI summaries',
+        '2000 AI questions',
+        'Custom tags & categories',
         'Export to multiple formats',
-        'Collaborative features',
+        'Advanced analytics',
+        'API access',
       ],
     },
   ];
@@ -123,7 +129,7 @@ const Pricing = () => {
                     : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
                 }`}
               >
-                {plan.name}
+                {plan.title}
               </button>
             ))}
           </div>
@@ -144,10 +150,10 @@ const Pricing = () => {
                 ) : null}
 
                 <h3 className='text-2xl font-bold mb-2'>
-                  {selectedPlanData.name} Plan
+                  {selectedPlanData.name}
                 </h3>
                 <p className='text-orange-100 mb-6'>
-                  Full access to all features
+                  {selectedPlanData.description}
                 </p>
 
                 <div className='flex items-center justify-center gap-4 mb-6'>
@@ -158,14 +164,16 @@ const Pricing = () => {
                       </span>
                       <span className='text-orange-100'>/plan</span>
                     </div>
-                    <div className='flex items-center gap-2 mt-2'>
-                      <span className='text-orange-200 line-through'>
-                        ${selectedPlanData.originalPrice}
-                      </span>
-                      <span className='bg-orange-400 text-white px-2 py-1 rounded-full text-xs font-medium'>
-                        Save {selectedPlanData.savings}
-                      </span>
-                    </div>
+                    {selectedPlanData.savings && (
+                      <div className='flex items-center gap-2 mt-2'>
+                        <span className='text-orange-200 line-through'>
+                          ${selectedPlanData.originalPrice}
+                        </span>
+                        <span className='bg-orange-400 text-white px-2 py-1 rounded-full text-xs font-medium'>
+                          Save {selectedPlanData.savings}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
