@@ -1,12 +1,12 @@
-import { ArrowRight, CheckCircle, Play, Star } from 'lucide-react';
-// import Image from 'next/image';
+import { ArrowRight, Play } from 'lucide-react';
+import Image from 'next/image';
 import Link from 'next/link';
 
 const Hero = () => {
   return (
     <div
       id='hero'
-      className='min-h-screen lg:min-h-0 lg:h-screen flex flex-col lg:flex-row  items-start md:items-center justify-center gap-16 lg:gap-8 mt-[80px] pt-[120px] lg:pt-[0px] lg:overflow-hidden px-6 lg:px-12'
+      className='min-h-screen lg:min-h-0 md:min-h-fit flex flex-col lg:flex-row  items-start md:items-center justify-center gap-16 lg:gap-8 mt-[80px] py-20 lg:overflow-hidden px-6 lg:px-12'
     >
       {/* Left Content */}
       <div className='lg:flex-[0.5] flex flex-col items-start md:items-center lg:items-start justify-center h-full space-y-8'>
@@ -101,10 +101,13 @@ const Hero = () => {
 
           {/* Main image container */}
           <div className='relative lg:top-9 lg:left-10 bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden'>
-            <img
+            <Image
               src='/dashboard.png'
               alt='YT Clipper Dashboard Preview'
+              width={900} // set an appropriate width
+              height={500} // set an appropriate height
               className='w-full h-auto object-cover lg:scale-125'
+              priority
             />
 
             {/* Floating elements */}

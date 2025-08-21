@@ -18,11 +18,6 @@ type FeatureType = {
   isWide: boolean;
 };
 
-type StatsType = {
-  number: string;
-  label: string;
-};
-
 const Features = () => {
   // Feature cards data - easy to modify
   const features: FeatureType[] = [
@@ -76,14 +71,6 @@ const Features = () => {
     },
   ];
 
-  // Statistics data
-  const stats: StatsType[] = [
-    { number: '10K+', label: 'Active Users' },
-    { number: '50K+', label: 'Videos Processed' },
-    { number: '99.9%', label: 'Uptime' },
-    { number: '4.9/5', label: 'User Rating' },
-  ];
-
   // Feature Card Component
   const FeatureCard = ({ feature }: { feature: FeatureType }) => {
     return (
@@ -133,20 +120,6 @@ const Features = () => {
 
         {/* Hover effect overlay */}
         <div className='absolute inset-0 rounded-2xl bg-gradient-to-r from-orange-500/5 to-orange-600/5 opacity-0 group-hover:opacity-100 transition-opacity duration-300' />
-      </div>
-    );
-  };
-
-  // Stats Card Component
-  const StatsCard = ({ stat }: { stat: StatsType }) => {
-    return (
-      <div className='text-center'>
-        <div className='text-3xl lg:text-4xl font-bold bg-gradient-to-r from-orange-600 to-orange-500 bg-clip-text text-transparent  mb-1 lg:mb-2 '>
-          {stat.number}
-        </div>
-        <div className='text-gray-600 text-sm lg:text-base font-medium'>
-          {stat.label}
-        </div>
       </div>
     );
   };
