@@ -5,21 +5,21 @@ const Maker = () => {
   const makers = [
     {
       id: 1,
-      name: 'Alex Chen',
+      name: 'Shubham Kumar',
       role: 'Full Stack Developer',
-      image: '/man-1.png',
+      image: '/shubham.jpeg',
       bio: 'Passionate about building scalable web applications and creating seamless user experiences. Loves working with modern technologies and solving complex problems.',
-      github: 'https://github.com',
-      x: 'https://x.com',
-      email: 'alex@ytclipper.com',
+      github: 'https://github.com/shubhamku044',
+      x: 'https://x.com/shubhamku044',
+      email: 'shubhamku044@gmail.com',
     },
     {
       id: 2,
-      name: 'Sarah Kim',
+      name: 'Priyabrata Mondal',
       role: 'Full Stack Developer',
-      image: '/man-1.png',
+      image: '/priyo.jpeg',
       bio: 'Focused on modern web technologies and creating intuitive interfaces that users love. Expert in frontend development and user experience design.',
-      github: 'https://github.com',
+      github: 'https://github.com/PriyabrataMo',
       x: 'https://x.com',
       email: 'sarah@ytclipper.com',
     },
@@ -71,11 +71,11 @@ const Maker = () => {
                 {/* Image Section - Half Width, Full Height */}
                 <div className='w-[40%] md:w-1/2 h-full relative'>
                   <Image
-                    width={100}
-                    height={100}
                     src={maker.image}
                     alt={maker.name}
-                    className='w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500'
+                    fill
+                    className='object-cover grayscale group-hover:grayscale-0 transition-all duration-500'
+                    sizes='(max-width: 768px) 50vw, 40vw'
                   />
                 </div>
 
